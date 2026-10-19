@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ThrowLab Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <span class="brand">Throw<b>Lab</b></span>
+    <button class="btn sm" id="layoutBtn" title="Choose the camera layout">Layout: <b id="layoutName">Side view</b></button>
+    <div class="seg" id="handSeg" role="group" aria-label="Throwing hand">
+      <button data-hand="R" aria-pressed="true">Right-handed</button>
+      <button data-hand="L" aria-pressed="false">Left-handed</button>
+    </div>
+    <span class="grow"></span>
+    <button class="btn sm" id="splitBtn" aria-pressed="false" title="Show a second clip next to this one">Compare 2 clips</button>
+    <button class="btn sm" id="saveSession" title="Download drawings, release marks and body tracking as a file">Save session</button>
+    <label class="btn sm" title="Restore a saved session">Load session<input type="file" id="loadSession" accept=".json,application/json" hidden></label>
+  </header>
+
+  <nav class="tools" id="tools" aria-label="Drawing tools"></nav>
+
+  <main class="stage" id="stage">
+    <section class="compare" id="compare" hidden></section>
+  </main>
+
+  <aside class="side" id="side">
+    <section>
+      <h3>Drawing</h3>
+      <div class="stack">
+        <p class="note" id="toolHint"></p>
+        <div class="sws" id="sws"></div>
+        <div class="seg" id="wSeg" role="group" aria-label="Line width">
+          <button data-w="3">Thin</button><button data-w="5" aria-pressed="true">Med</button><button data-w="8">Thick</button>
+        </div>
+        <div class="seg" id="pinSeg" role="group" aria-label="Show drawing on">
+          <button data-pin="frame">This frame</button><button data-pin="all" aria-pressed="true">All frames</button>
+        </div>
+        <div class="inline">
+          <button class="btn sm" id="undo">Undo</button>
+          <button class="btn sm" id="clear">Clear pane</button>
+          <button class="btn sm" id="clearBox" title="Remove the Follow player and Zoom boxes">Clear boxes</button>
+          <span class="note" id="annCount"></span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>Body tracking · <span id="anPane">A</span></h3>
+      <div class="stack">
+        <div class="inline">
+          <label class="lbl" for="model">Model</label>
+          <select id="model"><option value="lite">Fast</option><option value="full" selected>Balanced</option><option value="heavy">Most accurate</option></select>
+          <label class="lbl" for="smooth">Smoothing</label>
+          <select id="smooth"><option value="0">Off</option><option value="1" selected>Light</option><option value="2">Strong</option></select>
+        </div>
+        <label class="chk"><input type="checkbox" id="zoomCrop" checked> Zoom into the Follow player box</label>
+        <div class="inline">
+          <button class="btn primary" id="analyze">Analyze body</button>
+          <button class="btn" id="cancelAn" hidden>Cancel</button>
+          <button class="btn sm" id="clearPose" title="Remove the tracking for this clip">Clear tracking</button>
+        </div>
+        <progress id="anBar" max="1" value="0" hidden></progress>
+        <p class="note" id="anStatus">Runs on this device. Nothing is uploaded.</p>
+      </div>
+    </section>
+
+    <section>
+      <h3>Layers</h3>
+      <label class="chk"><input type="checkbox" data-layer="skeleton" checked> Body skeleton</label>
+      <label class="chk"><input type="checkbox" data-layer="joints" checked> Joint points</label>
+      <label class="chk"><input type="checkbox" data-layer="labels"> Elbow angle label</label>
+      <label class="chk"><input type="checkbox" data-layer="trail" checked> Throwing wrist path</label>
+      <label class="chk"><input type="checkbox" data-layer="lens" checked> Zoom window</label>
+      <label class="chk"><input type="checkbox" data-layer="roi" checked> Follow player box</label>
+    </section>
+
+    <section>
+      <h3>Measurements · <span id="measPane">A</span></h3>
+      <div id="meas"></div>
+      <p class="note" id="measNote">Run Analyze body to fill these in.</p>
+    </section>
+
+    <section>
+      <h3>Key moments · <span id="momPane">A</span></h3>
+      <div class="moments" id="moments"></div>
+      <div class="inline" style="margin-top:8px">
+        <button class="btn sm" id="suggest" title="Pick the frame where the throwing wrist moves fastest">Suggest release</button>
+        <button class="btn sm" id="clearRel">Clear release</button>
+      </div>
+    </section>
+
+    <section>
+      <h3>Export</h3>
+      <div class="inline"><button class="btn sm" id="snap" title="Save this frame with its drawings as a PNG">Save frame as image</button></div>
+    </section>
+  </aside>
+
+  <footer class="bar">
+    <div class="ctl">
+      <button class="ib" id="bFirst" title="First frame (Home)" aria-label="First frame"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button class="ib" id="bPrev" title="Previous frame (Left)" aria-label="Previous frame"><svg viewBox="0 0 24 24"><path d="M17 5v14L7 12z"/></svg></button>
+      <button class="ib play" id="bPlay" title="Play / pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 4v16l13-8z"/></svg></button>
+      <button class="ib" id="bNext" title="Next frame (Right)" aria-label="Next frame"><svg viewBox="0 0 24 24"><path d="M7 5v14l10-7z"/></svg></button>
+      <button class="ib" id="bLast" title="Last frame (End)" aria-label="Last frame"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      <span class="readout" id="readout">No clip</span>
+      <span class="lbl">Speed</span>
+      <select id="speed" aria-label="Playback speed"><option value="0.1">0.1×</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option></select>
+      <button class="btn sm" id="loop" aria-pressed="true">Loop</button>
+      <button class="btn sm" id="link" aria-pressed="true" title="Move both clips together">Link clips</button>
+      <button class="btn sm" id="align" title="Jump both clips to their release frames">Align releases</button>
+      <span class="lbl">Clip fps</span>
+      <select id="fps" aria-label="Frame rate of the selected clip"></select>
+    </div>
+    <div class="scrub">
+      <input type="range" id="scrub" min="0" max="0" step="1" value="0" aria-label="Frame">
+      <div class="ticks" id="ticks"></div>
+    </div>
+  </footer>
+</div>
+
+<div id="mediaHost" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="picker" aria-labelledby="pkTitle">
+  <div class="pk">
+    <h2 id="pkTitle">Choose a layout</h2>
+    <div class="pk-grid">
+      <div class="pk-prev">
+        <canvas id="pkCanvas" width="640" height="360"></canvas>
+        <p class="note" id="pkFile">No clip yet. You can pick a layout now.</p>
+      </div>
+      <div class="pk-cards" id="pkCards" role="radiogroup" aria-label="Camera layout"></div>
+    </div>
+    <div class="pk-opts">
+      <div><span class="lbl">Throwing hand</span>
+        <div class="seg" id="pkHand" role="group" aria-label="Throwing hand"><button data-hand="R">Right-handed</button><button data-hand="L">Left-handed</button></div></div>
+      <div id="pkDirWrap"><span class="lbl">Target is on the</span>
+        <div class="seg" id="pkDir" role="group" aria-label="Target side"><button data-dir="1">Right of screen</button><button data-dir="-1">Left of screen</button></div></div>
+    </div>
+    <ul class="pk-tips" id="pkTips"></ul>
+    <div class="pk-actions">
+      <button class="btn" id="pkCancel">Cancel</button>
+      <button class="btn primary" id="pkOk" autofocus>Open workspace</button>
+    </div>
+  </div>
+</dialog>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

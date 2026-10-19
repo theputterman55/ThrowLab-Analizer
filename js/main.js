@@ -1,0 +1,471 @@
+import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES } from './config.js';
+import { Pane } from './pane.js';
+import { analyze } from './pose.js';
+import { METRIC_DEFS, suggestRelease } from './metrics.js';
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------- preferences ---------- */
+const PREF_KEY = 'tl.prefs.v1';
+const loadPrefs = () => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch (_) { return {}; } };
+const prefs = loadPrefs();
+function savePrefs() {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify({ layout: state.layout, hand: state.hand, dir: state.dir, model: state.model, smooth: state.smooth, zoomCrop: state.zoomCrop, fps: state.fps }));
+  } catch (_) { /* storage may be blocked */ }
+}
+
+export const state = {
+  layout: LAYOUTS[prefs.layout] ? prefs.layout : 'side',
+  hand: prefs.hand === 'L' ? 'L' : 'R',
+  dir: prefs.dir === -1 ? -1 : 1,
+  tool: 'line', color: '#f2b63d', w: 5, pin: 'all',
+  playing: false, speed: 1, loop: true, link: true,
+  fps: FPS_CHOICES.includes(prefs.fps) ? prefs.fps : 30,
+  active: 'A', split: false,
+  model: ['lite', 'full', 'heavy'].includes(prefs.model) ? prefs.model : 'full',
+  smooth: [0, 1, 2].includes(Number(prefs.smooth)) ? Number(prefs.smooth) : 1,
+  zoomCrop: prefs.zoomCrop !== false,
+  layers: { skeleton: true, joints: true, labels: false, trail: true, lens: true, roi: true },
+  layoutChosen: false
+};
+
+let dirty = true;
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 4200);
+}
+
+const app = {
+  state,
+  stageEl: $('#stage'),
+  compareEl: $('#compare'),
+  requestRender: () => { dirty = true; },
+  setActive, onPaneChange, onMediaLoaded, toast
+};
+const panes = ['A', 'B'].map((id) => new Pane(id, app));
+const act = () => panes.find((p) => p.id === state.active) || panes[0];
+const visPanes = () => (state.split ? panes : [panes[0]]);
+const targets = () => (state.split && state.link ? panes : [act()]);
+
+/* ---------- tool rail ---------- */
+function buildTools() {
+  const rail = $('#tools');
+  rail.innerHTML = '';
+  toolsFor(state.layout).forEach((id, i) => {
+    if (i === CORE_TOOLS.length) { const s = document.createElement('div'); s.className = 'sep'; rail.appendChild(s); }
+    const d = TOOL_DEFS[id];
+    const b = document.createElement('button');
+    b.className = 'tool'; b.dataset.tool = id; b.title = `${d.label} (${d.key})`; b.setAttribute('aria-label', d.label);
+    b.innerHTML = `<svg viewBox="0 0 24 24">${d.svg}</svg><i>${d.key}</i>`;
+    b.onclick = () => setTool(id);
+    rail.appendChild(b);
+  });
+}
+function setTool(id) {
+  if (!toolsFor(state.layout).includes(id)) return;
+  state.tool = id;
+  panes.forEach((p) => { p.draft = null; p.finishPath(); });
+  syncUI(); dirty = true;
+}
+
+/* ---------- side panel builders ---------- */
+SWATCHES.forEach(([c, name]) => {
+  const b = document.createElement('button');
+  b.className = 'sw'; b.style.setProperty('--c', c); b.dataset.color = c; b.setAttribute('aria-label', name);
+  b.onclick = () => { state.color = c; syncUI(); };
+  $('#sws').appendChild(b);
+});
+$$('#wSeg button').forEach((b) => (b.onclick = () => { state.w = +b.dataset.w; syncUI(); }));
+$$('#pinSeg button').forEach((b) => (b.onclick = () => { state.pin = b.dataset.pin; syncUI(); }));
+$$('[data-layer]').forEach((c) => (c.onchange = () => { state.layers[c.dataset.layer] = c.checked; dirty = true; }));
+FPS_CHOICES.forEach((f) => { const o = document.createElement('option'); o.value = f; o.textContent = f; $('#fps').appendChild(o); });
+
+function buildMeas() {
+  const box = $('#meas');
+  box.innerHTML = '';
+  LAYOUTS[state.layout].metrics.forEach((m) => {
+    const def = METRIC_DEFS[m.k];
+    const row = document.createElement('div');
+    row.className = 'row';
+    if (def.note) row.title = def.note;
+    row.innerHTML = `<span>${m.label || def.label}</span><b id="m-${m.k}">—</b>`;
+    box.appendChild(row);
+  });
+}
+function updateMeas() {
+  const p = act();
+  $('#measPane').textContent = p.id;
+  const has = !!p.poseFrame();
+  $('#measNote').hidden = has;
+  $('#measNote').textContent = !p.media ? 'Open a clip, then run Analyze body.' : p.raw ? 'No body found on this frame.' : 'Run Analyze body to fill these in.';
+  LAYOUTS[state.layout].metrics.forEach((m) => {
+    const v = has ? p.metric(m.k) : null;
+    $('#m-' + m.k).textContent = v === null ? '—' : METRIC_DEFS[m.k].fmt(v);
+  });
+}
+
+function updateCompare() {
+  const box = $('#compare');
+  box.hidden = !state.split;
+  if (!state.split) return;
+  const L = LAYOUTS[state.layout];
+  const cell = (p, k) => {
+    if (!p.media || !p.raw) return '—';
+    const f = p.rel !== null ? p.rel : Math.round(p.f);
+    const v = p.metric(k, f);
+    return v === null ? '—' : METRIC_DEFS[k].fmt(v);
+  };
+  const diff = (k) => {
+    const [a, b] = panes.map((p) => (p.media && p.raw ? p.metric(k, p.rel !== null ? p.rel : Math.round(p.f)) : null));
+    if (a === null || b === null) return '—';
+    const d = b - a;
+    return (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d).toFixed(0) + (k === 'wristH' || k === 'stance' ? ' pts' : '°');
+  };
+  box.innerHTML = `<h3>Throw comparison · at the release mark, or the current frame where none is set</h3><table><thead><tr><th>Measurement</th><th class="hA">A</th><th class="hB">B</th><th>B − A</th></tr></thead><tbody>${
+    L.metrics.map((m) => `<tr><td>${m.label || METRIC_DEFS[m.k].label}</td><td class="n">${cell(panes[0], m.k)}</td><td class="n">${cell(panes[1], m.k)}</td><td class="n">${diff(m.k)}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+function buildMoments() {
+  const p = act();
+  $('#momPane').textContent = p.id;
+  const mo = $('#moments');
+  mo.innerHTML = '';
+  if (p.rel === null) {
+    const n = document.createElement('p');
+    n.className = 'note'; n.textContent = 'Step to the release frame and press Mark release, or run Analyze body and press Suggest release.';
+    mo.appendChild(n);
+  } else {
+    const b = document.createElement('button');
+    b.innerHTML = `<span>Release</span><span>F ${p.rel + 1}</span>`;
+    b.onclick = () => jumpRel();
+    mo.appendChild(b);
+  }
+  const tk = $('#ticks');
+  tk.innerHTML = '';
+  if (p.rel !== null && p.N > 1) {
+    const b = document.createElement('button');
+    b.className = 'tick'; b.title = `Release · F ${p.rel + 1}`; b.setAttribute('aria-label', b.title);
+    b.style.left = `calc(8px + (100% - 16px) * ${p.rel / (p.N - 1)})`;
+    b.onclick = () => jumpRel();
+    tk.appendChild(b);
+  }
+}
+
+/* ---------- layout picker ---------- */
+const dlg = $('#picker');
+let pk = { layout: 'side', hand: 'R', dir: 1 };
+const DIAGRAMS = {
+  back: '<path d="M44 40h32l6 -10H38z"/><circle cx="60" cy="12" r="3"/><path d="M60 15v8M56 18h8"/><path d="M60 24v-2"/>',
+  side: '<path d="M24 38h72"/><circle cx="40" cy="12" r="3"/><path d="M40 15v12l-4 9M40 27l5 9M40 19l12 6"/><path d="M82 38l12-6"/><rect x="102" y="18" width="10" height="8" rx="1"/>',
+  shoulder: '<circle cx="44" cy="14" r="3"/><path d="M44 17v14M44 21l14 3M44 31l-4 9M44 31l5 9"/><rect x="14" y="26" width="12" height="8" rx="1"/><path d="M26 28l12-8" stroke-dasharray="2 2"/><path d="M70 38h30l-4-8H74z"/>',
+  broadcast: '<rect x="8" y="6" width="104" height="34" rx="3"/><circle cx="40" cy="16" r="3"/><path d="M40 19v10M36 24h8"/><path d="M60 34h44M60 28h28" stroke-dasharray="3 3"/>'
+};
+function buildCards() {
+  const box = $('#pkCards');
+  box.innerHTML = '';
+  LAYOUT_ORDER.forEach((id) => {
+    const L = LAYOUTS[id];
+    const b = document.createElement('button');
+    b.className = 'card'; b.dataset.layout = id; b.setAttribute('role', 'radio');
+    b.innerHTML = `<svg viewBox="0 0 120 46" aria-hidden="true">${DIAGRAMS[id]}</svg><strong>${L.name}</strong><span>${L.blurb}</span>`;
+    b.onclick = () => { pk.layout = id; syncPicker(); };
+    box.appendChild(b);
+  });
+}
+function syncPicker() {
+  $$('#pkCards .card').forEach((c) => c.setAttribute('aria-checked', c.dataset.layout === pk.layout));
+  $$('#pkHand button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.hand === pk.hand));
+  $$('#pkDir button').forEach((b) => b.setAttribute('aria-pressed', +b.dataset.dir === pk.dir));
+  $('#pkDirWrap').hidden = !LAYOUTS[pk.layout].dirChoice;
+  $('#pkTips').innerHTML = LAYOUTS[pk.layout].tips.map((t) => `<li>${t}</li>`).join('');
+}
+function drawPreview() {
+  const c = $('#pkCanvas'), ctx = c.getContext('2d');
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, c.width, c.height);
+  const p = panes[0];
+  if (p.media) {
+    const s = Math.min(c.width / p.media.w, c.height / p.media.h), w = p.media.w * s, h = p.media.h * s;
+    ctx.drawImage(p.media.el, (c.width - w) / 2, (c.height - h) / 2, w, h);
+    $('#pkFile').textContent = `${p.nameEl.textContent} · ${p.metaEl.textContent}`;
+  } else $('#pkFile').textContent = 'No clip yet. You can pick a layout now.';
+}
+function openPicker() {
+  pk = { layout: state.layout, hand: state.hand, dir: state.dir };
+  buildCards(); drawPreview(); syncPicker();
+  if (!dlg.open) dlg.showModal();
+}
+$$('#pkHand button').forEach((b) => (b.onclick = () => { pk.hand = b.dataset.hand; syncPicker(); }));
+$$('#pkDir button').forEach((b) => (b.onclick = () => { pk.dir = +b.dataset.dir; syncPicker(); }));
+$('#pkOk').onclick = () => {
+  state.hand = pk.hand; state.dir = pk.dir; state.layoutChosen = true;
+  applyLayout(pk.layout);
+  dlg.close();
+};
+$('#pkCancel').onclick = () => { state.layoutChosen = true; dlg.close(); };
+dlg.addEventListener('cancel', () => { state.layoutChosen = true; });
+$('#layoutBtn').onclick = openPicker;
+
+function applyLayout(id) {
+  state.layout = id;
+  const L = LAYOUTS[id];
+  state.split = L.split; state.pin = L.pin;
+  if (!toolsFor(id).includes(state.tool)) state.tool = 'line';
+  if (!state.split) state.active = 'A';
+  panes.forEach((p) => { p.draft = null; p.finishPath(); });
+  buildTools(); buildMeas(); syncUI(); savePrefs(); dirty = true;
+}
+
+/* ---------- header controls ---------- */
+$$('#handSeg button').forEach((b) => (b.onclick = () => { state.hand = b.dataset.hand; savePrefs(); syncUI(); dirty = true; }));
+$('#splitBtn').onclick = () => {
+  state.split = !state.split;
+  if (!state.split) state.active = 'A';
+  syncUI(); dirty = true;
+};
+
+/* ---------- analysis ---------- */
+let abort = null;
+async function runAnalysis() {
+  const p = act();
+  if (!p.media) { toast('Open a clip first.'); return; }
+  abort = new AbortController();
+  p.analyzing = true;
+  const prevF = Math.round(p.f);
+  $('#analyze').disabled = true; $('#cancelAn').hidden = false;
+  const bar = $('#anBar'); bar.hidden = false; bar.value = 0;
+  const status = $('#anStatus');
+  status.textContent = 'Starting the body tracker…';
+  try {
+    let found = 0;
+    const roi = p.roi;
+    const res = await analyze(p, {
+      model: state.model, roi, zoomCrop: state.zoomCrop, signal: abort.signal,
+      onProgress: (i, n, ok) => { if (ok) found++; bar.value = i / n; status.textContent = `Frame ${i} of ${n} · body found in ${found}`; dirty = true; }
+    });
+    const raw = res.frames;
+    p.setPose(raw, { model: state.model, roi: p.roi, zoomCrop: state.zoomCrop, fps: p.fps });
+    const n = raw.filter(Boolean).length;
+    if (!n) status.textContent = 'No body was found. Try the Follow player box, or the Most accurate model.';
+    else {
+      let extra = '';
+      if (p.rel === null && p.media.type === 'video') {
+        const s = suggestRelease(p.smoothed, p.media, state.hand);
+        if (s >= 0) { p.rel = s; extra = ` Release suggested at F ${s + 1}. Move it with Mark release if it is off.`; }
+      }
+      const many = !roi && res.maxPeople > 1 ? ' Several people were in view. Draw a Follow player box (F) and analyze again to lock onto the thrower.' : '';
+      status.textContent = `Done. Body found in ${n} of ${raw.length} frames.${extra}${many}`;
+    }
+  } catch (e) {
+    status.textContent = e.name === 'AbortError' ? 'Cancelled.' : `The tracker could not run: ${e.message || e}`;
+  } finally {
+    p.analyzing = false; abort = null;
+    if (p.media.type === 'video') { p.f = prevF; await p.seekTo(prevF); }
+    $('#analyze').disabled = false; $('#cancelAn').hidden = true; bar.hidden = true;
+    syncUI(); dirty = true;
+  }
+}
+$('#analyze').onclick = runAnalysis;
+$('#cancelAn').onclick = () => abort?.abort();
+$('#clearPose').onclick = () => { const p = act(); p.raw = null; p.smoothed = null; p.poseInfo = null; $('#anStatus').textContent = 'Tracking cleared.'; syncUI(); dirty = true; };
+$('#model').value = state.model; $('#smooth').value = String(state.smooth); $('#zoomCrop').checked = state.zoomCrop;
+$('#model').onchange = (e) => { state.model = e.target.value; savePrefs(); };
+$('#smooth').onchange = (e) => { state.smooth = +e.target.value; panes.forEach((p) => p.rebuildSmooth()); savePrefs(); syncUI(); dirty = true; };
+$('#zoomCrop').onchange = (e) => { state.zoomCrop = e.target.checked; savePrefs(); };
+
+$('#suggest').onclick = () => {
+  const p = act();
+  if (!p.smoothed) { toast('Run Analyze body first.'); return; }
+  const s = suggestRelease(p.smoothed, p.media, state.hand);
+  if (s < 0) { toast('Could not find the throwing wrist. Try the Follow player box.'); return; }
+  p.rel = s; p.f = s; syncUI(); dirty = true;
+};
+$('#clearRel').onclick = () => { act().rel = null; syncUI(); };
+
+$('#undo').onclick = () => act().undo();
+$('#clear').onclick = () => act().clearAnn();
+$('#clearBox').onclick = () => { const p = act(); p.roi = null; p.lens = null; dirty = true; syncUI(); };
+
+/* ---------- transport ---------- */
+function step(d) {
+  state.playing = false;
+  targets().forEach((p) => { if (p.media) p.f = clamp(Math.round(p.f) + d, 0, p.N - 1); });
+  syncUI(); dirty = true;
+}
+function goTo(which) {
+  state.playing = false;
+  targets().forEach((p) => { if (p.media) p.f = which === 'first' ? 0 : p.N - 1; });
+  syncUI(); dirty = true;
+}
+function togglePlay() {
+  const list = targets().filter((p) => p.media?.type === 'video');
+  if (!list.length) return;
+  state.playing = !state.playing;
+  if (state.playing && !state.loop) list.forEach((p) => { if (p.f >= p.N - 1) p.f = 0; });
+  syncUI();
+}
+function jumpRel() {
+  state.playing = false;
+  targets().forEach((p) => { if (p.rel !== null) p.f = p.rel; });
+  syncUI(); dirty = true;
+}
+$('#bFirst').onclick = () => goTo('first'); $('#bLast').onclick = () => goTo('last');
+$('#bPrev').onclick = () => step(-1); $('#bNext').onclick = () => step(1);
+$('#bPlay').onclick = togglePlay;
+$('#speed').onchange = (e) => { state.speed = +e.target.value; };
+$('#loop').onclick = () => { state.loop = !state.loop; syncUI(); };
+$('#link').onclick = () => { state.link = !state.link; syncUI(); };
+$('#align').onclick = () => {
+  let any = false;
+  panes.forEach((p) => { if (p.rel !== null && p.media) { p.f = p.rel; any = true; } });
+  if (any) { state.link = true; state.playing = false; syncUI(); dirty = true; } else toast('Mark the release on each clip first.');
+};
+$('#fps').onchange = (e) => {
+  const v = +e.target.value, p = act();
+  state.fps = v; savePrefs();
+  if (p.media?.type === 'video') { p.setFps(v); syncUI(); dirty = true; }
+};
+$('#scrub').oninput = (e) => {
+  const p = act(), d = +e.target.value - Math.round(p.f);
+  state.playing = false;
+  targets().forEach((q) => { if (q.media) q.f = clamp(Math.round(q.f) + d, 0, q.N - 1); });
+  syncUI(); dirty = true;
+};
+
+/* ---------- session save / load / snapshot ---------- */
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$('#saveSession').onclick = () => {
+  const data = { app: 'ThrowLab Analyzer', version: 1, layout: state.layout, hand: state.hand, dir: state.dir, panes: panes.map((p) => p.toJSON()) };
+  download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'throwlab-session.json');
+  toast('Session saved. Open the same clips again, then load it to restore everything.');
+};
+$('#loadSession').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (d.app !== 'ThrowLab Analyzer') throw new Error('That is not a ThrowLab session file.');
+    state.hand = d.hand === 'L' ? 'L' : 'R'; state.dir = d.dir === -1 ? -1 : 1;
+    state.layoutChosen = true;
+    d.panes.forEach((pd, i) => { if (panes[i]) panes[i].fromJSON(pd); });
+    applyLayout(LAYOUTS[d.layout] ? d.layout : state.layout);
+    if (d.panes.length > 1 && !state.split) { state.split = true; syncUI(); }
+    const mism = d.panes.some((pd, i) => panes[i]?.media && pd.N && pd.N !== panes[i].N);
+    toast(mism ? 'Session loaded, but a clip has a different frame count than when it was saved.' : 'Session loaded.');
+    dirty = true;
+  } catch (err) { toast(err.message || 'Could not read that session file.'); }
+};
+$('#snap').onclick = () => {
+  const p = act();
+  if (!p.media) { toast('Open a clip first.'); return; }
+  p.render();
+  p.cv.toBlob((b) => b && download(b, `throwlab-${p.id}-F${Math.round(p.f) + 1}.png`), 'image/png');
+};
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown', (e) => {
+  const tg = e.target.tagName;
+  if (dlg.open || tg === 'SELECT' || (tg === 'INPUT' && e.target.type !== 'checkbox')) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); act().undo(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  const keys = Object.fromEntries(Object.entries(TOOL_DEFS).map(([id, d]) => [d.key.toLowerCase(), id]));
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); step(e.shiftKey ? -5 : -1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); step(e.shiftKey ? 5 : 1); }
+  else if (e.key === 'Home') goTo('first');
+  else if (e.key === 'End') goTo('last');
+  else if (e.key === 'Enter') panes.forEach((p) => p.finishPath());
+  else if (keys[k]) setTool(keys[k]);
+});
+
+/* ---------- state to UI ---------- */
+function onPaneChange() { syncUI(); dirty = true; }
+function onMediaLoaded(p) {
+  if (p.id === state.active || !state.split) $('#fps').value = String(p.fps);
+  syncUI(); dirty = true;
+  if (!state.layoutChosen) openPicker();
+}
+function setActive(id) {
+  if (!state.split && id !== 'A') return;
+  state.active = id; syncUI(); dirty = true;
+}
+
+function syncUI() {
+  const p = act(), L = LAYOUTS[state.layout];
+  $('#layoutName').textContent = L.name;
+  panes.forEach((q) => {
+    q.el.classList.toggle('active', q.id === state.active && state.split);
+    q.el.hidden = !state.split && q.id !== 'A';
+  });
+  $('#stage').classList.toggle('single', !state.split);
+  $('#stage').classList.toggle('drawing', state.tool !== 'cursor');
+  $$('.tool').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === state.tool));
+  $('#toolHint').textContent = TOOL_DEFS[state.tool].hint;
+  $$('.sw').forEach((b) => b.setAttribute('aria-pressed', b.dataset.color === state.color));
+  $$('#wSeg button').forEach((b) => b.setAttribute('aria-pressed', +b.dataset.w === state.w));
+  $$('#pinSeg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.pin === state.pin));
+  $$('#handSeg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.hand === state.hand));
+  $('#splitBtn').setAttribute('aria-pressed', state.split);
+  $('#loop').setAttribute('aria-pressed', state.loop);
+  $('#link').setAttribute('aria-pressed', state.link && state.split);
+  $('#link').disabled = !state.split; $('#align').disabled = !state.split;
+  $('#playIcon').innerHTML = state.playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
+  $('#bPlay').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
+  $('#anPane').textContent = p.id;
+  $('#analyze').disabled = !p.media || p.analyzing;
+  $('#clearPose').disabled = !p.raw;
+  $('#suggest').disabled = !p.raw;
+  $('#fps').disabled = p.media?.type !== 'video';
+  if (p.media) $('#fps').value = String(p.fps);
+  $('#annCount').textContent = `${p.ann.length} on clip ${p.id}`;
+  buildMoments(); updateCompare(); tickUI();
+}
+
+function tickUI() {
+  const p = act(), f = Math.round(p.f);
+  const sc = $('#scrub');
+  sc.max = Math.max(0, p.N - 1); sc.value = f; sc.disabled = !p.media || p.N < 2;
+  $('#readout').textContent = !p.media ? 'No clip' : p.media.type === 'image' ? 'Photo' : `F ${f + 1} / ${p.N} · ${(f / p.fps).toFixed(3)} s`;
+  updateMeas();
+}
+
+/* ---------- main loop ---------- */
+let last = performance.now();
+function loop(ts) {
+  const dt = Math.min(0.1, (ts - last) / 1000);
+  last = ts;
+  if (state.playing) {
+    let moving = false;
+    targets().forEach((p) => {
+      if (p.media?.type !== 'video') return;
+      p.f += dt * p.fps * state.speed;
+      if (p.f >= p.N - 1) { if (state.loop) p.f = 0; else p.f = p.N - 1; } else moving = true;
+    });
+    if (!moving && !state.loop) { state.playing = false; syncUI(); }
+    dirty = true;
+  }
+  if (dirty) {
+    dirty = false;
+    visPanes().forEach((p) => p.render());
+    tickUI();
+    updateCompare();
+  }
+  requestAnimationFrame(loop);
+}
+
+buildTools(); buildMeas(); syncUI();
+if (document.fonts?.ready) document.fonts.ready.then(() => { dirty = true; });
+requestAnimationFrame(loop);
+window.__throwlab = { state, panes, applyLayout, runAnalysis };
