@@ -47,6 +47,7 @@ button,select,input{font:inherit;color:inherit}
 .top{grid-area:top;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line)}
 .brand{font:700 21px/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase;margin-right:6px}
 .brand b{color:var(--accent-text);font-weight:700}
+.ver{font:500 12px var(--f-mono);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin-left:-2px;cursor:default}
 .grow{flex:1}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;flex-wrap:nowrap}
 .seg button{background:none;border:0;padding:4px 11px;cursor:pointer;color:var(--muted);font-weight:500;white-space:nowrap}

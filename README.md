@@ -84,9 +84,6 @@ Do not commit throw footage or photos of people to this repo. Video files are ig
 
 Body tracking uses Google MediaPipe, licensed under Apache-2.0. See `NOTICE.md`.
 
-## Zoom and pan
+## Versions
 
-- Pinch on a trackpad (or scroll the mouse wheel) over a clip to zoom toward the pointer. Up to 16x.
-- The corner control has a magnifier (zoom window), minus, slider, plus, Fit and Hold. Keys: + - 0.
-- Pan by dragging with the Cursor tool, Alt or Shift + drag with any tool, or middle/right-button drag.
-- Hold locks the zoom and position so nothing moves it while you draw or step frames.
+The version shows beside the ThrowLab name. It is MAJOR.MINOR.PATCH: a new feature raises the middle number (1.2.1 to 1.3.0), a fix raises the last (1.2.1 to 1.2.2), and a big rework raises the first. History is in CHANGELOG.md. Change `VERSION` in `js/config.js` when you push.

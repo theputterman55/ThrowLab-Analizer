@@ -1,4 +1,4 @@
-import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES } from './config.js';
+import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION } from './config.js';
 import { Pane } from './pane.js';
 import { analyze } from './pose.js';
 import { METRIC_DEFS, suggestRelease } from './metrics.js';
@@ -49,6 +49,7 @@ const app = {
   setActive, onPaneChange, onMediaLoaded, toast,
   setTool: (id) => setTool(id)
 };
+$('#ver').textContent = 'v' + VERSION;
 const panes = ['A', 'B'].map((id) => new Pane(id, app));
 const act = () => panes.find((p) => p.id === state.active) || panes[0];
 const visPanes = () => (state.split ? panes : [panes[0]]);
@@ -347,7 +348,7 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 $('#saveSession').onclick = () => {
-  const data = { app: 'ThrowLab Analyzer', version: 1, layout: state.layout, hand: state.hand, dir: state.dir, panes: panes.map((p) => p.toJSON()) };
+  const data = { app: 'ThrowLab Analyzer', version: 1, appVersion: VERSION, layout: state.layout, hand: state.hand, dir: state.dir, panes: panes.map((p) => p.toJSON()) };
   download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'throwlab-session.json');
   toast('Session saved. Open the same clips again, then load it to restore everything.');
 };

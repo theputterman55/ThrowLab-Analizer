@@ -1,5 +1,8 @@
 // Layout and tool configuration. Adding a new camera layout means adding one entry to LAYOUTS.
 
+// App version, MAJOR.MINOR.PATCH (see CHANGELOG.md). Bump it with every change that gets pushed.
+export const VERSION = '1.2.1';
+
 export const CORE_TOOLS = ['cursor', 'line', 'arrow', 'circle', 'rect', 'angle', 'pen', 'eraser'];
 
 export const TOOL_DEFS = {
