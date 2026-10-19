@@ -8,6 +8,9 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.9.4
+- New **Show both players** checkbox under the P1/P2 buttons. On: the other player's lines (same throw number) are drawn on the video along with the active player's, each with a red P1 / blue P2 badge, and each player's angle boxes are named (P1 ELBOW, P2 ELBOW) and stacked on opposite sides. Editing still follows the P1/P2 buttons. The choice is remembered.
+
 ## 1.9.3
 - Right panel back to the compact 1.8.1 layout (300px, Player P1/P2 with Show box / Draw / ×, Throw 1-4, sets side by side, Undo / Finish / Clear set / Rotate on one line, step bar), placed where it was between Body tracking and Layers.
 - Kept everything added since: Lock arm checkbox, Hold still / Glide switch, arm hangs from the Shoulders dot, big named angle boxes with leader lines.

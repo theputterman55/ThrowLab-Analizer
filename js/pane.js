@@ -293,7 +293,7 @@ export class Pane {
   // The body on frame f: the tracker's result, with any hand-placed joints laid over it.
   poseFrame(f = Math.round(this.f)) {
     const base = TRACKER_UI && this.smoothed ? this.smoothed[f] || null : null;
-    const hand = this.app.state.hand, key = `${f}|${this.ptVer}|${this.sv}|${hand}`;
+    const hand = this.app.state.hand, key = `${f}|${this.ptVer}|${this.sv}|${hand}|${this.slotKey()}`;
     if (this.pcache && this.pcache.key === key) return this.pcache.v;
     let out = base;
     for (const k of Object.keys(this.pts).sort((a, b) => (b === 'arm') - (a === 'arm'))) { // the Arm set goes first so Shoulders wins on the shared shoulder
@@ -544,11 +544,11 @@ export class Pane {
   clearSet(key) { if (!this.pts[key]) return; this.ptSnap(); delete this.pts[key]; this.ptDraft = null; this.ptChanged(); }
 
   // Angle readouts: big boxes stacked in the margin on the side of the video the player is on, each tied to its joint by a leader line.
-  drawReadouts(ctx, rd, W, H, u, ext) {
-    if (!rd.length) return;
+  drawReadouts(ctx, rd, W, H, u, ext, forceSide) {
+    if (!rd.length) return null;
     const sc = this.k * this.vw.z, v = this.vw;
     const x0 = Math.max(0, -v.tx / sc), x1 = Math.min(W, (this.cv.width - v.tx) / sc), y0 = Math.max(0, -v.ty / sc), y1 = Math.min(H, (this.cv.height - v.ty) / sc);
-    const left = rd.reduce((s, r) => s + r.ax, 0) / rd.length < (x0 + x1) / 2; // left player reads on the left, right player on the right
+    const left = forceSide ? forceSide === 'left' : rd.reduce((s, r) => s + r.ax, 0) / rd.length < (x0 + x1) / 2; // left player reads on the left, right player on the right
     const fs = 30 * u, h = 46 * u, gap = 8 * u, m = 14 * u;
     ctx.save();
     ctx.textBaseline = 'middle';
@@ -575,15 +575,27 @@ export class Pane {
       ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(fs)}px 'JetBrains Mono', ui-monospace, monospace`; ctx.fillText(it.text, bx + 22 * u + it.wl, it.y + 1);
     }
     ctx.restore();
+    return left ? 'left' : 'right';
   }
 
+  // Draws the active player's lines, and, with "Show both players" on, the other player's lines for the same throw number.
   drawManual(ctx, W, H, f, u, st) {
+    const both = !!st.both, side = this.drawManualOne(ctx, W, H, f, u, st, { both });
+    if (!both) return;
+    const op = this.slot.player === 1 ? 2 : 1, d = this.slots[this.slotKey(op, this.slot.throw)];
+    if (!d || !Object.keys(d.pts).length) return;
+    const keep = this.slot; this.slot = { player: op, throw: keep.throw };
+    try { this.drawManualOne(ctx, W, H, f, u, st, { both, ghost: true, side: side === 'left' ? 'right' : 'left' }); } finally { this.slot = keep; }
+  }
+  drawManualOne(ctx, W, H, f, u, st, o = {}) {
+    const px0 = [];
     const rd = [], ext = [1e9, -1e9]; // readouts, stacked at the side of the video by drawReadouts; ext = left and right edge of the marked points
     for (const k of POINT_SET_ORDER) {
       const def = POINT_SETS[k], cur = this.livePts(k, f);
-      const P = cur ? cur.pts : (this.ptDraft && this.ptDraft.key === k && this.ptDraft.f === f ? this.ptDraft.pts : null);
+      const P = cur ? cur.pts : (!o.ghost && this.ptDraft && this.ptDraft.key === k && this.ptDraft.f === f ? this.ptDraft.pts : null);
       if (!P) continue;
-      const px = P.map((p) => [p[0] * W, p[1] * H]), live = st.pset === k;
+      const px = P.map((p) => [p[0] * W, p[1] * H]), live = !o.ghost && st.pset === k;
+      if (cur && !px0.length) px0.push(...px);
       if (cur) px.forEach(([x]) => { ext[0] = Math.min(ext[0], x); ext[1] = Math.max(ext[1], x); });
       ctx.save();
       ctx.lineCap = 'round';
@@ -626,7 +638,13 @@ export class Pane {
       }
       ctx.restore();
     }
-    this.drawReadouts(ctx, rd, W, H, u, ext);
+    if (o.both && px0.length) { // player badge over the first marked point
+      const pl = this.slot.player; ctx.save(); ctx.font = `700 ${Math.round(22 * u)}px 'JetBrains Mono', ui-monospace, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const [bx, by] = px0[0], w = 46 * u; ctx.fillStyle = PLAYER_COLORS[pl]; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - w / 2, by - 44 * u, w, 28 * u, 6 * u) : ctx.rect(bx - w / 2, by - 44 * u, w, 28 * u); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillText('P' + pl, bx, by - 29 * u); ctx.restore();
+      rd.forEach((r) => { r.label = 'P' + pl + ' ' + r.label; });
+    }
+    return this.drawReadouts(ctx, rd, W, H, u, ext, o.side);
   }
 
   metric(key, f = Math.round(this.f)) {

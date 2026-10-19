@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.9.3';
+window.__TL_VERSION = '1.9.4';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -104,6 +104,7 @@ window.__TL_VERSION = '1.9.3';
         <button class="btn sm boxbtn" id="boxToggle" aria-pressed="false" title="Show or hide this player's box from the current frame on">Show box</button>
         <button class="btn sm" id="boxDraw" title="Draw this player's box (F)">Draw</button>
         <button class="btn sm" id="boxClear" title="Remove this player's box">×</button></div>
+      <label class="chk" id="showBothRow" title="Draw the lines of both players on the video at the same time (same throw number)"><input type="checkbox" id="showBoth"> Show both players</label>
       <p class="note" id="boxInfo"></p>
       <div class="slotrow"><span class="lbl">Throw</span>
         <div class="seg" id="ptThrow" role="group" aria-label="Throw number"></div>

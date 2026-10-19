@@ -31,7 +31,7 @@ export const state = {
   smooth: [0, 1, 2].includes(Number(prefs.smooth)) ? Number(prefs.smooth) : 1,
   zoomCrop: prefs.zoomCrop !== false,
   layers: { skeleton: true, joints: true, labels: false, trail: true, lens: true, roi: true },
-  layoutChosen: false, prot: false, pwhole: false, alock: false, blend: false, pset: null // prot: rotate pin shown, pwhole: a move or rotation shifts every keyframe; pset: the point set being placed by hand (shoulders, hips) or null
+  layoutChosen: false, prot: false, pwhole: false, alock: false, blend: false, both: false, pset: null // prot: rotate pin shown, pwhole: a move or rotation shifts every keyframe; pset: the point set being placed by hand (shoulders, hips) or null
 };
 
 let dirty = true;
@@ -526,6 +526,7 @@ function updatePtUI() {
   $('#ptPlay').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
   $('#ptFrame').textContent = !p.media ? 'No clip' : `Frame ${f + 1} / ${p.N} · ${(f / p.fps).toFixed(3)} s${mo && f >= mo.start && f <= mo.end ? ' · in motion' : ''}`;
   $('#ptUndo').disabled = !p.ptHist.length;
+  $('#showBoth').checked = state.both;
   $$('#ptBlend button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.b === '1') === state.blend)));
   ['#ptDone', '#ptClear', '#ptRotate'].forEach((s) => ($(s).disabled = !state.pset));
   const nk = p.allKeys().length;
@@ -565,6 +566,8 @@ $('#ptHelp').onclick = () => setHelp(!$('#ptSec').classList.contains('show-help'
 $('#ptRotate').onclick = () => { state.prot = !state.prot; syncUI(); dirty = true; };
 try { state.blend = localStorage.getItem('tl.blend') === '1'; } catch (_) { /* ignore */ }
 $$('#ptBlend button').forEach((b) => (b.onclick = () => { state.blend = b.dataset.b === '1'; try { localStorage.setItem('tl.blend', state.blend ? '1' : '0'); } catch (_) { /* ignore */ } syncUI(); dirty = true; panes.forEach((p) => { p.ptVer++; }); }));
+try { state.both = localStorage.getItem('tl.both') === '1'; } catch (_) { /* ignore */ }
+$('#showBoth').onchange = (e) => { state.both = e.target.checked; try { localStorage.setItem('tl.both', state.both ? '1' : '0'); } catch (_) { /* ignore */ } dirty = true; syncUI(); };
 $('#armLock').onchange = (e) => { state.alock = e.target.checked; syncUI(); };
 $$('#ptScope button').forEach((b) => (b.onclick = () => { state.pwhole = b.dataset.s === 'all'; syncUI(); dirty = true; }));
 // Player / throw slots
