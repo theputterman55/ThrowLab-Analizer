@@ -11,15 +11,15 @@ Everything runs in the browser on your own device. Nothing is uploaded anywhere.
 
   | Layout | Camera | Screen | Extra tools |
   |---|---|---|---|
-  | Back of board | Behind the board, thrower at the far end | One large pane | Board outline with lane line, zoom window, vertical and level lines, Follow player |
+  | Back of board | Behind the board, thrower at the far end | One large pane | Board outline with lane line, zoom window, vertical and level lines |
   | Side view | Beside the thrower | Two clips side by side, with a comparison table | Path tracer, vertical and level lines |
-  | Over the shoulder | About 2 ft behind and 6 ft to the side of the throwing shoulder | One large pane | Path tracer, zoom window, vertical and level lines, Follow player |
-  | Broadcast / wide | TV or livestream footage | One large pane | Zoom window, Follow player |
+  | Over the shoulder | About 2 ft behind and 6 ft to the side of the throwing shoulder | One large pane | Path tracer, zoom window, vertical and level lines |
+  | Broadcast / wide | TV or livestream footage | One large pane | Zoom window |
 
 - **Handedness.** Right or left, and for side and broadcast views, which side of the screen the target is on. Measurements follow the throwing arm.
 - **Player.** Frame-by-frame stepping, play at 0.1x to 1x, scrub bar, loop. Frame rate is detected when a video loads and can be overridden.
 - **Drawing tools.** Line (shows its angle), arrow, circle, square, three-point angle, pen, eraser, undo. Drawings can be pinned to one frame or shown on all frames.
-- **Body tracking.** MediaPipe Pose Landmarker, 33 body points per frame. Pick the thrower with a Follow player box, which also zooms into that area so far-away throwers track better. Three model sizes and light or strong smoothing.
+- **Body tracking (switched off in 1.5.1; add `?tracker=1` to the address to bring it back).** MediaPipe Pose Landmarker, 33 body points per frame. Pick the thrower with a Follow player box, which also zooms into that area so far-away throwers track better. Three model sizes and light or strong smoothing.
 - **Measurements.** Elbow angle, arm swing, torso lean, lead knee, wrist height, shoulder and hip tilt, stance width, arm line. Which ones show depends on the layout.
 - **Release marker.** Mark it by hand, or let the tracker suggest the frame where the throwing wrist moves fastest. Align releases to compare two throws.
 - **Save session.** Download drawings, release marks and body tracking as a JSON file and load them again later. Save any frame with its drawings as a PNG.

@@ -1,6 +1,6 @@
 // One video (or photo) pane: media, frame stepping, drawing, body overlay.
 import { drawAnn, annDist, tag } from './annotate.js';
-import { COL, FPS_CHOICES, POINT_SETS, POINT_SET_ORDER } from './config.js';
+import { COL, FPS_CHOICES, POINT_SETS, POINT_SET_ORDER, TRACKER_UI } from './config.js';
 import { smoothFrames, packFrames, unpackFrames, TrackSession, bboxOf, followBox } from './pose.js';
 import { roleIndex, throwingWristIndex, computeMetric, angle3, METRIC_DEFS } from './metrics.js';
 
@@ -289,7 +289,7 @@ export class Pane {
   rebuildSmooth() { this.sv++; this.smoothed = this.raw ? smoothFrames(this.raw, this.app.state.smooth) : null; }
   // The body on frame f: the tracker's result, with any hand-placed joints laid over it.
   poseFrame(f = Math.round(this.f)) {
-    const base = this.smoothed ? this.smoothed[f] || null : null;
+    const base = TRACKER_UI && this.smoothed ? this.smoothed[f] || null : null;
     const hand = this.app.state.hand, key = `${f}|${this.ptVer}|${this.sv}|${hand}`;
     if (this.pcache && this.pcache.key === key) return this.pcache.v;
     let out = base;
@@ -617,12 +617,12 @@ export class Pane {
     const sc = this.k * z;
     ctx.setTransform(sc, 0, 0, sc, v.tx, v.ty);
     ctx.drawImage(this.media.el, 0, 0, W, H);
-    this.drawBody(ctx, W, H, f, st);
+    if (TRACKER_UI) this.drawBody(ctx, W, H, f, st);
     if (this.ptDraft && this.ptDraft.f !== f) this.ptDraft = null;
     this.drawManual(ctx, W, H, f, u, st);
     for (const a of this.ann) if (a.frame === null || a.frame === f) drawAnn(ctx, a, W, H, f, z);
     if (this.draft) this.drawDraft(ctx, W, H, f, st);
-    if (st.layers.roi) {
+    if (TRACKER_UI && st.layers.roi) {
       // Once tracking exists the box belongs to the tracked frames only (it is the box used on that frame).
       let box = null;
       if (this.hasTracking()) { if (this.tr[f]) box = this.boxes[f]; else if (st.tool === 'roi') box = this.roi; } else box = this.roi;
@@ -630,7 +630,7 @@ export class Pane {
     }
     if (this.lens && st.layers.lens) this.drawLens(ctx, W, H, u);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const trk = this.hasTracking() ? (this.tr[f] ? ' · tracked' : ' · not tracked') : '';
+    const trk = TRACKER_UI && this.hasTracking() ? (this.tr[f] ? ' · tracked' : ' · not tracked') : '';
     this.tc.textContent = this.media.type === 'image' ? 'Photo' + trk : `F ${f + 1} / ${this.N} · ${(f / this.fps).toFixed(3)} s${trk}`;
   }
 

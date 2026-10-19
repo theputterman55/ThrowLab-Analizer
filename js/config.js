@@ -29,7 +29,7 @@ export const LAYOUTS = {
     blurb: 'Camera behind the board, thrower at the far end. One large pane with a zoom window.',
     tips: [
       'Phone on a tripod behind the board, level, with the whole board and the thrower in frame.',
-      'Draw the board outline to get a lane line, then box the thrower with Follow player.',
+      'Draw the board outline to get a lane line, then mark the joints with the Point labeler.',
       'Shoot 60 fps or higher. 4K helps when the thrower is far away.'
     ],
     split: false, pin: 'all', dirChoice: false,
@@ -74,7 +74,7 @@ export const LAYOUTS = {
     blurb: 'TV or livestream footage. Moving camera, graphics, other people on screen.',
     tips: [
       'The camera moves and cuts, so drawings pin to a single frame by default.',
-      'Always box the player with Follow player. Screens and graphics can contain other people.',
+      'Mark the joints by hand with the Point labeler. Screens and graphics can contain other people.',
       'Keep broadcast footage for private study only.'
     ],
     split: false, pin: 'frame', dirChoice: true,
@@ -87,7 +87,10 @@ export const LAYOUTS = {
 
 export const LAYOUT_ORDER = ['back', 'side', 'shoulder', 'broadcast'];
 
-export const toolsFor = (layoutId) => [...CORE_TOOLS, ...LAYOUTS[layoutId].extraTools];
+// The automatic body tracker is switched off (v1.5.1). Open the page with ?tracker=1 to bring it back (for testing).
+export const TRACKER_UI = /[?&]tracker=1/.test(globalThis.location?.search || '');
+
+export const toolsFor = (layoutId) => [...CORE_TOOLS, ...LAYOUTS[layoutId].extraTools].filter((t) => TRACKER_UI || t !== 'roi');
 
 export const FPS_CHOICES = [24, 25, 30, 48, 50, 60, 90, 100, 120, 240];
 export const COL = { A: '#5be3b5', B: '#7db8ff' };

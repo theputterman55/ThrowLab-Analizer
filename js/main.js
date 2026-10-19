@@ -1,10 +1,11 @@
-import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION, POINT_SETS, POINT_SET_ORDER, METRIC_COLORS } from './config.js';
+import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION, TRACKER_UI, POINT_SETS, POINT_SET_ORDER, METRIC_COLORS } from './config.js';
 import { Pane } from './pane.js';
 import { METRIC_DEFS, suggestRelease } from './metrics.js';
 import * as store from './store.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+if (TRACKER_UI) document.documentElement.classList.add('trk-on');
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ---------- preferences ---------- */
@@ -107,7 +108,7 @@ function updateMeas() {
   $('#measPane').textContent = p.id;
   const has = !!p.poseFrame();
   $('#measNote').hidden = has;
-  $('#measNote').textContent = !p.media ? 'Open a clip, then track a shot.' : p.hasTracking() ? (p.tr[Math.round(p.f)] ? 'No body found on this frame.' : 'This frame is not tracked. Step next to the tracked frames, or press the tracker play.') : 'Track a shot (Body tracking panel) to fill these in.';
+  $('#measNote').textContent = !TRACKER_UI ? (p.media ? 'Place points with the Point labeler to fill these in.' : 'Open a clip, then place points.') : !p.media ? 'Open a clip, then track a shot.' : p.hasTracking() ? (p.tr[Math.round(p.f)] ? 'No body found on this frame.' : 'This frame is not tracked. Step next to the tracked frames, or press the tracker play.') : 'Track a shot (Body tracking panel) to fill these in.';
   LAYOUTS[state.layout].metrics.forEach((m) => {
     const v = has ? p.metric(m.k) : null;
     $('#m-' + m.k).textContent = v === null ? '—' : METRIC_DEFS[m.k].fmt(v);

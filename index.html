@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.5.0';
+window.__TL_VERSION = '1.5.1';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -63,7 +63,7 @@ window.__TL_VERSION = '1.5.0';
       </div>
     </section>
 
-    <section>
+    <section class="trkonly">
       <h3>Body tracking · <span id="anPane">A</span></h3>
       <div class="stack">
         <div class="inline">
@@ -102,7 +102,7 @@ window.__TL_VERSION = '1.5.0';
         <p class="note" id="ptHint"></p>
         <div class="inline">
           <button class="btn sm" id="ptDone" title="Lock the points from the first keyframe to this frame (Enter)">✓ Finish</button>
-          <button class="btn sm" id="ptSeed" title="Start this frame from the tracker's skeleton, then drag to fix">Use tracker's points</button>
+          <button class="btn sm trkonly" id="ptSeed" title="Start this frame from the tracker's skeleton, then drag to fix">Use tracker's points</button>
           <button class="btn sm" id="ptClear" title="Delete this set of points">Clear set</button>
         </div>
         <p class="note" id="ptInfo"></p>
@@ -111,12 +111,12 @@ window.__TL_VERSION = '1.5.0';
 
     <section>
       <h3>Layers</h3>
-      <label class="chk"><input type="checkbox" data-layer="skeleton" checked> Body skeleton</label>
-      <label class="chk"><input type="checkbox" data-layer="joints" checked> Joint points</label>
-      <label class="chk"><input type="checkbox" data-layer="labels"> Elbow angle label</label>
-      <label class="chk"><input type="checkbox" data-layer="trail" checked> Throwing wrist path</label>
+      <label class="chk trkonly"><input type="checkbox" data-layer="skeleton" checked> Body skeleton</label>
+      <label class="chk trkonly"><input type="checkbox" data-layer="joints" checked> Joint points</label>
+      <label class="chk trkonly"><input type="checkbox" data-layer="labels"> Elbow angle label</label>
+      <label class="chk trkonly"><input type="checkbox" data-layer="trail" checked> Throwing wrist path</label>
       <label class="chk"><input type="checkbox" data-layer="lens" checked> Zoom window</label>
-      <label class="chk"><input type="checkbox" data-layer="roi" checked> Follow player box</label>
+      <label class="chk trkonly"><input type="checkbox" data-layer="roi" checked> Follow player box</label>
     </section>
 
     <section>
@@ -165,7 +165,7 @@ window.__TL_VERSION = '1.5.0';
     </div>
     <div class="scrub">
       <input type="range" id="scrub" min="0" max="0" step="1" value="0" aria-label="Frame">
-      <div class="ticks" id="ticks"><div class="trbands" id="trbands"></div></div>
+      <div class="ticks" id="ticks"><div class="trbands trkonly" id="trbands"></div></div>
     </div>
   </footer>
 </div>

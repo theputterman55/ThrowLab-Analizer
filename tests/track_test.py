@@ -20,7 +20,7 @@ def main():
     tmp = tempfile.mkdtemp(); v = os.path.join(tmp, "t.webm")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=480x270:rate=30:duration=3",
                     "-c:v", "libvpx", "-b:v", "1M", v], check=True)
-    srv = serve(); url = f"http://127.0.0.1:{srv.server_address[1]}/index.html"
+    srv = serve(); url = f"http://127.0.0.1:{srv.server_address[1]}/index.html?tracker=1"
     with sync_playwright() as p:
         b = p.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
         pg = b.new_context(viewport={"width": 1500, "height": 900}).new_page()

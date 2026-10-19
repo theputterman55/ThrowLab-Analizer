@@ -8,6 +8,11 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.5.1
+- The pointer is an arrow while you place points with the Point labeler, including when zoomed in. (The pan hand was winning over it.) The Cursor tool still shows the hand when zoomed.
+- The automatic body tracker is hidden: no skeleton, wrist trail, Follow box, tracked bands, Body tracking panel, Follow player tool or "Use tracker's points". Measurements, Layers (zoom window), Key moments, drawing tools and the Point labeler stay. Measurements now come only from the points you place.
+- The tracker code is still in the files. Open the page with `?tracker=1` to bring it back (used by the tests).
+
 ## 1.5.0
 - Point labeler: mark joints by hand. Pick Shoulders or Hips, click the two points, press D for the next frame (A goes back). Points carry forward; drag a dot only where the joint moves. That makes a keyframe, and frames between keyframes are blended.
 - Finish (or Enter) locks the points from the first keyframe to the current frame; Edit reopens. On playback the points move along the person with a color-coded line and angle.

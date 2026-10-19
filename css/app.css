@@ -205,5 +205,6 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 #ptPanel{border-left:3px solid var(--c,var(--line));padding-left:10px;display:flex;flex-direction:column;gap:8px}
 #ptPanel[hidden]{display:none}
 .mdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-right:7px}
-.stage.pointing canvas{cursor:crosshair}
+.stage.pointing canvas,.stage.pointing:not(.drawing) .view.zoomed canvas{cursor:default}
+html:not(.trk-on) .trkonly{display:none!important}
 .ptk{position:absolute;bottom:6px;width:3px;height:9px;margin-left:-1.5px;background:var(--c);border-radius:1px}

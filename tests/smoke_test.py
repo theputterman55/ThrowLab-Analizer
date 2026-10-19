@@ -29,7 +29,7 @@ def main():
     v30, v60 = os.path.join(tmp, "t30.webm"), os.path.join(tmp, "t60.webm")
     make_video(v30, 30, 2); make_video(v60, 60, 1)
     srv = serve()
-    url = f"http://127.0.0.1:{srv.server_address[1]}/index.html"
+    url = f"http://127.0.0.1:{srv.server_address[1]}/index.html?tracker=1"
     with sync_playwright() as p:
         b = p.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
         pg = b.new_context(viewport={"width": 1500, "height": 900}, accept_downloads=True).new_page()
