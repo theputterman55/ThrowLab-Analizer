@@ -1,8 +1,8 @@
 // One video (or photo) pane: media, frame stepping, drawing, body overlay.
-import { drawAnn, annDist } from './annotate.js';
-import { COL, FPS_CHOICES } from './config.js';
+import { drawAnn, annDist, tag } from './annotate.js';
+import { COL, FPS_CHOICES, POINT_SETS, POINT_SET_ORDER } from './config.js';
 import { smoothFrames, packFrames, unpackFrames, TrackSession, bboxOf, followBox } from './pose.js';
-import { roleIndex, throwingWristIndex, computeMetric, angle3 } from './metrics.js';
+import { roleIndex, throwingWristIndex, computeMetric, angle3, METRIC_DEFS } from './metrics.js';
 
 const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [27, 31], [28, 32], [27, 29], [28, 30], [15, 19], [16, 20]];
 const ARM_R = new Set(['12-14', '14-16', '16-20']);
@@ -46,6 +46,7 @@ export class Pane {
     this.rel = null; this.roi = null; this.lens = null;
     this.raw = null; this.smoothed = null; this.poseInfo = null;
     this.tr = null; this.boxes = null; this.trCount = 0; this.session = null; // tr[f] = 1 where the body tracker has run
+    this.pts = {}; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer = 0; this.sv = 0; this.pcache = null; // hand-placed points
     this.analyzing = false; this.seeking = false;
     // View (zoom/pan) in canvas pixels: screen = point * z + (tx, ty). hold locks it.
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null;
@@ -85,7 +86,7 @@ export class Pane {
     this.cv.addEventListener('pointerdown', (e) => this.onDown(e));
     this.cv.addEventListener('pointermove', (e) => this.onMove(e));
     this.cv.addEventListener('pointerup', (e) => this.onUp(e));
-    this.cv.addEventListener('pointercancel', (e) => { this.ptrs.delete(e.pointerId); this.pinch = null; this.draft = null; this.endPan(); this.app.requestRender(); });
+    this.cv.addEventListener('pointercancel', (e) => { this.ptrs.delete(e.pointerId); this.pinch = null; this.draft = null; this.pdrag = null; this.endPan(); this.app.requestRender(); });
     this.cv.addEventListener('contextmenu', (e) => { if (this.media) e.preventDefault(); });
     this.cv.addEventListener('dblclick', () => { if (this.media && this.app.state.tool === 'cursor') this.fit(); });
     // Pinch on a trackpad arrives as Ctrl+wheel; a mouse wheel zooms too. Both zoom toward the pointer.
@@ -174,6 +175,7 @@ export class Pane {
     this.vsz = { W: Math.round(this.media.w * s), H: Math.round(this.media.h * s) };
     this.f = 0; this.ann = []; this.hist = []; this.rel = null; this.roi = null; this.lens = null;
     this.clearPose(); this.draft = null; this.pathAnn = null;
+    this.pts = {}; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer++;
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null; this.layout(); this.syncZoom();
     this.emptyEl.hidden = true;
     this.updateMeta();
@@ -242,7 +244,7 @@ export class Pane {
     if (this.raw && this.raw.length === this.N) return;
     this.raw = new Array(this.N).fill(null); this.tr = new Uint8Array(this.N); this.boxes = new Array(this.N).fill(null); this.trCount = 0;
   }
-  clearPose() { this.raw = null; this.smoothed = null; this.poseInfo = null; this.tr = null; this.boxes = null; this.trCount = 0; }
+  clearPose() { this.sv++; this.raw = null; this.smoothed = null; this.poseInfo = null; this.tr = null; this.boxes = null; this.trCount = 0; }
   // Store the result for one frame (frame may be null: tracked, nobody found).
   putFrame(f, frame, box) {
     this.ensurePose();
@@ -284,8 +286,120 @@ export class Pane {
     this.putFrame(f, r.frame, box);
     return r;
   }
-  rebuildSmooth() { this.smoothed = this.raw ? smoothFrames(this.raw, this.app.state.smooth) : null; }
-  poseFrame(f = Math.round(this.f)) { return this.smoothed ? this.smoothed[f] || null : null; }
+  rebuildSmooth() { this.sv++; this.smoothed = this.raw ? smoothFrames(this.raw, this.app.state.smooth) : null; }
+  // The body on frame f: the tracker's result, with any hand-placed joints laid over it.
+  poseFrame(f = Math.round(this.f)) {
+    const base = this.smoothed ? this.smoothed[f] || null : null;
+    const hand = this.app.state.hand, key = `${f}|${this.ptVer}|${this.sv}|${hand}`;
+    if (this.pcache && this.pcache.key === key) return this.pcache.v;
+    let out = base;
+    for (const k of Object.keys(this.pts)) {
+      const cur = this.setPoints(k, f); if (!cur || !POINT_SETS[k]) continue;
+      if (out === base) out = base ? Float32Array.from(base) : new Float32Array(99);
+      POINT_SETS[k].roles.forEach((r, j) => { const i = roleIndex(r, hand) * 3; out[i] = cur.pts[j][0]; out[i + 1] = cur.pts[j][1]; out[i + 2] = 1; });
+    }
+    this.pcache = { key, v: out };
+    return out;
+  }
+
+  // ---------- point labeler ----------
+  ptSnap() { this.ptHist.push(JSON.stringify(this.pts)); if (this.ptHist.length > 100) this.ptHist.shift(); }
+  undoPts() { if (!this.ptHist.length) return false; this.pts = JSON.parse(this.ptHist.pop()); this.ptDraft = null; this.ptChanged(); return true; }
+  ptChanged() { this.ptVer++; this.app.requestRender(); this.app.onPaneChange(this, true); }
+  keyFrames(key) { const s = this.pts[key]; return s ? Object.keys(s.kf).map(Number).sort((a, b) => a - b) : []; }
+  // Points of a set on frame f: { pts, key } (key = a frame you placed). Held forward until Finish, blended between keyframes.
+  setPoints(key, f) {
+    const s = this.pts[key], ks = this.keyFrames(key);
+    if (!s || !ks.length || f < ks[0] || (s.end !== null && f > s.end)) return null;
+    let i = ks.length - 1; while (ks[i] > f) i--;
+    const a = s.kf[ks[i]];
+    if (ks[i] === f) return { pts: a, key: true };
+    if (i === ks.length - 1) return { pts: a, key: false };
+    const b = s.kf[ks[i + 1]], t = (f - ks[i]) / (ks[i + 1] - ks[i]);
+    return { pts: a.map((p, j) => [p[0] + (b[j][0] - p[0]) * t, p[1] + (b[j][1] - p[1]) * t]), key: false };
+  }
+  ensureKey(key, f) {
+    const s = this.pts[key]; if (!s) return null;
+    if (s.kf[f]) return s.kf[f];
+    const cur = this.setPoints(key, f); if (!cur) return null;
+    s.kf[f] = cur.pts.map((p) => [p[0], p[1]]);
+    return s.kf[f];
+  }
+  // Click or drag on the video while a point set is active.
+  pointDown(e) {
+    const key = this.app.state.pset, def = POINT_SETS[key]; if (!def) return;
+    const f = Math.round(this.f), q = this.pt(e), cur = this.setPoints(key, f);
+    if (cur) {
+      // Grab the nearest dot; a click far from any dot moves the nearest one there.
+      const [cx, cy] = this.canvasXY(e), sc = this.k * this.vw.z, v = this.vw;
+      let best = 0, bd = 1e9;
+      cur.pts.forEach((p, j) => { const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
+      this.ptSnap();
+      const kf = this.ensureKey(key, f);
+      if (!kf) { this.ptHist.pop(); return; }
+      if (bd > 30) kf[best] = [q[0], q[1]];
+      this.pdrag = { key, idx: best, f };
+      try { this.cv.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      this.ptChanged();
+      return;
+    }
+    const s = this.pts[key];
+    if (s && s.end !== null) { this.app.toast(`${def.label} is finished. Press Edit to change it.`); return; }
+    if (!this.ptDraft || this.ptDraft.key !== key || this.ptDraft.f !== f) this.ptDraft = { key, f, pts: [] };
+    this.ptDraft.pts.push([q[0], q[1]]);
+    if (this.ptDraft.pts.length === def.roles.length) {
+      this.ptSnap();
+      if (!this.pts[key]) this.pts[key] = { kf: {}, end: null };
+      this.pts[key].kf[f] = this.ptDraft.pts; this.ptDraft = null;
+      this.ptChanged();
+    } else this.app.requestRender();
+  }
+  // Finish (lock the range from the first keyframe to this frame) or reopen a finished set.
+  toggleDone(key) {
+    const s = this.pts[key]; if (!s) return 'none';
+    if (s.end !== null) { this.ptSnap(); s.end = null; this.ptChanged(); return 'reopened'; }
+    const f = Math.round(this.f), ks = this.keyFrames(key);
+    if (f < ks[0]) return 'early';
+    this.ptSnap(); this.ensureKey(key, f); s.end = f; this.ptChanged();
+    return 'done';
+  }
+  // Fill this frame's points from the tracker's skeleton, to drag from there.
+  seedFromTracker(key) {
+    const def = POINT_SETS[key], f = Math.round(this.f), base = this.smoothed?.[f], hand = this.app.state.hand;
+    if (!base) return 'none';
+    const pts = [];
+    for (const r of def.roles) { const i = roleIndex(r, hand) * 3; if (base[i + 2] < 0.3) return 'none'; pts.push([base[i], base[i + 1]]); }
+    const s = this.pts[key];
+    if (s && s.end !== null && (f > s.end || f < this.keyFrames(key)[0])) return 'finished';
+    this.ptSnap();
+    if (!this.pts[key]) this.pts[key] = { kf: {}, end: null };
+    this.pts[key].kf[f] = pts; this.ptDraft = null; this.ptChanged();
+    return 'ok';
+  }
+  clearSet(key) { if (!this.pts[key]) return; this.ptSnap(); delete this.pts[key]; this.ptDraft = null; this.ptChanged(); }
+
+  drawManual(ctx, W, H, f, u, st) {
+    for (const k of POINT_SET_ORDER) {
+      const def = POINT_SETS[k], cur = this.setPoints(k, f);
+      const P = cur ? cur.pts : (this.ptDraft && this.ptDraft.key === k && this.ptDraft.f === f ? this.ptDraft.pts : null);
+      if (!P) continue;
+      const px = P.map((p) => [p[0] * W, p[1] * H]), live = st.pset === k;
+      ctx.save();
+      ctx.strokeStyle = def.color; ctx.lineCap = 'round';
+      if (px.length > 1) { ctx.lineWidth = (live ? 5 : 4) * u; ctx.beginPath(); ctx.moveTo(px[0][0], px[0][1]); ctx.lineTo(px[1][0], px[1][1]); ctx.stroke(); }
+      px.forEach(([x, y]) => {
+        ctx.beginPath(); ctx.arc(x, y, (cur && cur.key ? 8 : 6) * u * (live ? 1.15 : 1), 0, Math.PI * 2);
+        if (cur && cur.key) { ctx.fillStyle = def.color; ctx.fill(); ctx.lineWidth = 2.5 * u; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+        else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 3 * u; ctx.strokeStyle = def.color; ctx.stroke(); }
+      });
+      if (cur && px.length === 2) {
+        const v = computeMetric(def.metric, this.poseFrame(f), this.media, st.hand, st.dir);
+        if (v !== null) tag(ctx, METRIC_DEFS[def.metric].fmt(v), (px[0][0] + px[1][0]) / 2, Math.min(px[0][1], px[1][1]) - 26 * u, u);
+      }
+      ctx.restore();
+    }
+  }
+
   metric(key, f = Math.round(this.f)) {
     const fr = this.poseFrame(f);
     if (!fr || !this.media) return null;
@@ -399,7 +513,7 @@ export class Pane {
       return;
     }
     // Pan: middle or right button, Alt/Shift+drag, or any drag with the cursor tool. Only when zoomed in and not on hold.
-    if (e.button === 1 || e.button === 2 || (e.button === 0 && (e.altKey || e.shiftKey || t === 'cursor'))) {
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && (e.altKey || e.shiftKey || (t === 'cursor' && !st.pset)))) {
       e.preventDefault();
       if (this.vw.hold || this.vw.z <= 1.001) return;
       this.pan = { x: e.clientX, y: e.clientY };
@@ -407,6 +521,7 @@ export class Pane {
       this.cv.style.cursor = 'grabbing';
       return;
     }
+    if (st.pset && e.button === 0) { e.preventDefault(); this.pointDown(e); return; }
     if (t === 'cursor' || e.button > 0) return;
     e.preventDefault();
     const q = this.pt(e);
@@ -451,6 +566,11 @@ export class Pane {
       Object.assign(this.pinch, { d, mx, my });
       return;
     }
+    if (this.pdrag) {
+      const kf = this.pts[this.pdrag.key]?.kf[this.pdrag.f], q = this.pt(e);
+      if (kf) { kf[this.pdrag.idx] = [q[0], q[1]]; this.ptVer++; this.app.requestRender(); }
+      return;
+    }
     if (this.pan) {
       const r = this.cv.getBoundingClientRect(), v = this.vw;
       v.tx += ((e.clientX - this.pan.x) / r.width) * this.cv.width;
@@ -471,6 +591,7 @@ export class Pane {
     this.ptrs.delete(e.pointerId);
     if (this.ptrs.size < 2) this.pinch = null;
     if (wasPinch) return;
+    if (this.pdrag) { this.pdrag = null; this.ptChanged(); return; }
     if (this.pan) { this.endPan(); return; }
     const d = this.draft;
     if (!d || !d.drag) return;
@@ -497,6 +618,8 @@ export class Pane {
     ctx.setTransform(sc, 0, 0, sc, v.tx, v.ty);
     ctx.drawImage(this.media.el, 0, 0, W, H);
     this.drawBody(ctx, W, H, f, st);
+    if (this.ptDraft && this.ptDraft.f !== f) this.ptDraft = null;
+    this.drawManual(ctx, W, H, f, u, st);
     for (const a of this.ann) if (a.frame === null || a.frame === f) drawAnn(ctx, a, W, H, f, z);
     if (this.draft) this.drawDraft(ctx, W, H, f, st);
     if (st.layers.roi) {
@@ -564,7 +687,7 @@ export class Pane {
     const hand = st.hand, u = W / 1280 / this.vw.z;
     const col = COL[this.id];
     const P = (i) => [fr[i * 3] * W, fr[i * 3 + 1] * H, fr[i * 3 + 2]];
-    if (L.trail) {
+    if (L.trail && this.smoothed) {
       const wi = throwingWristIndex(hand);
       ctx.save(); ctx.strokeStyle = AMBER; ctx.lineWidth = 3 * u; ctx.lineJoin = 'round'; ctx.beginPath();
       let started = false, a0 = f;
@@ -629,7 +752,7 @@ export class Pane {
   toJSON() {
     return {
       name: this.nameEl.textContent, fps: this.fps, N: this.N, size: this.media ? [this.media.w, this.media.h] : null,
-      ann: this.ann, rel: this.rel, roi: this.roi, lens: this.lens,
+      ann: this.ann, rel: this.rel, roi: this.roi, lens: this.lens, pts: this.pts,
       pose: this.raw && this.trCount ? {
         info: this.poseInfo, frames: packFrames(this.raw), ranges: this.ranges(),
         boxes: this.boxes.map((b) => (b ? [b.x, b.y, b.w, b.h].map((v) => Math.round(v * 10000) / 10000) : null))
@@ -638,6 +761,7 @@ export class Pane {
   }
   fromJSON(d) {
     this.ann = d.ann || []; this.hist = []; this.rel = d.rel ?? null; this.roi = d.roi || null; this.lens = d.lens || null;
+    this.pts = d.pts || {}; this.ptHist = []; this.ptDraft = null; this.ptVer++;
     if (d.pose?.frames) this.setPose(unpackFrames(d.pose.frames), d.pose.info, { ranges: d.pose.ranges, boxes: d.pose.boxes });
   }
 }

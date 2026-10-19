@@ -1,4 +1,4 @@
-import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION } from './config.js';
+import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION, POINT_SETS, POINT_SET_ORDER, METRIC_COLORS } from './config.js';
 import { Pane } from './pane.js';
 import { METRIC_DEFS, suggestRelease } from './metrics.js';
 import * as store from './store.js';
@@ -30,7 +30,7 @@ export const state = {
   smooth: [0, 1, 2].includes(Number(prefs.smooth)) ? Number(prefs.smooth) : 1,
   zoomCrop: prefs.zoomCrop !== false,
   layers: { skeleton: true, joints: true, labels: false, trail: true, lens: true, roi: true },
-  layoutChosen: false
+  layoutChosen: false, pset: null // pset: the point set being placed by hand (shoulders, hips) or null
 };
 
 let dirty = true;
@@ -72,8 +72,8 @@ function buildTools() {
 }
 function setTool(id) {
   if (!toolsFor(state.layout).includes(id)) return;
-  state.tool = id;
-  panes.forEach((p) => { p.draft = null; p.finishPath(); });
+  state.tool = id; state.pset = null;
+  panes.forEach((p) => { p.draft = null; p.ptDraft = null; p.finishPath(); });
   syncUI(); dirty = true;
 }
 
@@ -97,7 +97,8 @@ function buildMeas() {
     const row = document.createElement('div');
     row.className = 'row';
     if (def.note) row.title = def.note;
-    row.innerHTML = `<span>${m.label || def.label}</span><b id="m-${m.k}">—</b>`;
+    const dot = METRIC_COLORS[m.k] ? `<i class="mdot" style="--c:${METRIC_COLORS[m.k]}"></i>` : '';
+    row.innerHTML = `<span>${dot}${m.label || def.label}</span><b id="m-${m.k}">—</b>`;
     box.appendChild(row);
   });
 }
@@ -334,6 +335,14 @@ function drawBands() {
     d.style.width = `max(4px, calc((100% - 16px) * ${(b - a) / (p.N - 1)}))`;
     box.appendChild(d);
   }
+  for (const k of POINT_SET_ORDER) {
+    for (const kf of p.keyFrames(k)) {
+      const t = document.createElement('div');
+      t.className = 'ptk'; t.style.setProperty('--c', POINT_SETS[k].color);
+      t.style.left = `calc(8px + (100% - 16px) * ${kf / (p.N - 1)})`;
+      box.appendChild(t);
+    }
+  }
 }
 function updateTrackUI() {
   const p = act(), f = Math.round(p.f), on = !!p.media, vid = on && p.N > 1;
@@ -375,7 +384,8 @@ $('#suggest').onclick = () => {
 };
 $('#clearRel').onclick = () => { act().rel = null; syncUI(); };
 
-$('#undo').onclick = () => act().undo();
+const undoAny = () => { const p = act(); if (state.pset && p.undoPts()) return; p.undo(); };
+$('#undo').onclick = undoAny;
 $('#clear').onclick = () => act().clearAnn();
 $('#clearBox').onclick = () => { const p = act(); p.roi = null; p.lens = null; dirty = true; syncUI(); };
 
@@ -461,6 +471,59 @@ $('#snap').onclick = () => {
   p.snapshot((b) => b && download(b, `throwlab-${p.id}-F${Math.round(p.f) + 1}.png`));
 };
 
+/* ---------- point labeler ---------- */
+function setPset(key) {
+  state.pset = state.pset === key ? null : key;
+  if (state.pset) state.tool = 'cursor';
+  panes.forEach((p) => { p.draft = null; p.ptDraft = null; p.finishPath(); });
+  syncUI(); dirty = true;
+}
+POINT_SET_ORDER.forEach((k) => {
+  const b = document.createElement('button');
+  b.className = 'ptset'; b.dataset.set = k; b.style.setProperty('--c', POINT_SETS[k].color); b.setAttribute('aria-pressed', 'false');
+  b.innerHTML = `<i></i><span>${POINT_SETS[k].label}</span><em></em>`;
+  b.onclick = () => setPset(k);
+  $('#ptSets').appendChild(b);
+});
+const fr1 = (n) => n + 1; // frames are shown starting from 1
+function updatePtUI() {
+  const p = act();
+  $('#ptPane').textContent = p.id;
+  POINT_SET_ORDER.forEach((k) => {
+    const b = $(`.ptset[data-set=${k}]`), s = p.pts[k], ks = p.keyFrames(k);
+    b.setAttribute('aria-pressed', String(state.pset === k));
+    b.querySelector('em').textContent = !s ? '' : s.end !== null ? `✓ ${fr1(ks[0])}–${fr1(s.end)}` : `${ks.length} key${ks.length === 1 ? '' : 's'}`;
+  });
+  const key = state.pset, panel = $('#ptPanel');
+  panel.hidden = !key;
+  if (!key) return;
+  const def = POINT_SETS[key], s = p.pts[key], ks = p.keyFrames(key), f = Math.round(p.f), cur = p.setPoints(key, f);
+  panel.style.setProperty('--c', def.color);
+  let hint;
+  if (!p.media) hint = 'Open a clip first.';
+  else if (cur) hint = cur.key ? 'Keyframe. Drag a dot to move it, or click near the joint to put the nearest dot there. Press D for the next frame.' : 'Following your earlier points. Drag a dot only where the joint has moved, then press D.';
+  else if (s && s.end !== null) hint = `${def.label} is finished. Press Edit to change it.`;
+  else if (p.ptDraft && p.ptDraft.key === key && p.ptDraft.f === f) hint = `Click the ${def.names[p.ptDraft.pts.length]} on the video.`;
+  else hint = `Click the ${def.names[0]} on the video, then the ${def.names[1]}.`;
+  $('#ptHint').textContent = hint;
+  $('#ptDone').textContent = s && s.end !== null ? 'Edit' : '✓ Finish';
+  $('#ptInfo').textContent = !s ? 'Nothing placed yet.' : `Keyframes: ${ks.map(fr1).join(', ')}. ${s.end !== null ? `Finished, frames ${fr1(ks[0])}–${fr1(s.end)}.` : 'Not finished: the points carry forward until you press Finish on the last frame of the motion.'}`;
+}
+$('#ptDone').onclick = () => {
+  const key = state.pset; if (!key) return;
+  const r = act().toggleDone(key);
+  if (r === 'none') toast('Place the points first.');
+  else if (r === 'early') toast('Step to the last frame of the motion, then press Finish.');
+  else if (r === 'done') toast('Finished. Play the clip to see it move.');
+};
+$('#ptSeed').onclick = () => {
+  const key = state.pset; if (!key) return;
+  const r = act().seedFromTracker(key);
+  if (r === 'none') toast('The tracker has no good points on this frame. Place them by hand.');
+  else if (r === 'finished') toast('This set is finished. Press Edit to change it.');
+};
+$('#ptClear').onclick = () => { const key = state.pset; if (key) act().clearSet(key); };
+
 /* ---------- keep pinch / Ctrl+scroll inside the app ---------- */
 // A trackpad pinch arrives as Ctrl+wheel and would zoom the whole browser page. Block that
 // everywhere; a pane under the pointer handles it as a video zoom instead.
@@ -471,9 +534,15 @@ for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEve
 document.addEventListener('keydown', (e) => {
   const tg = e.target.tagName;
   if (dlg.open || tg === 'SELECT' || (tg === 'INPUT' && e.target.type !== 'checkbox')) return;
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); act().undo(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoAny(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
+  if (state.pset) {
+    if (k === 'd') { e.preventDefault(); step(1); return; }
+    if (k === 'a') { e.preventDefault(); step(-1); return; }
+    if (e.key === 'Enter') { e.preventDefault(); $('#ptDone').click(); return; }
+    if (e.key === 'Escape') { setPset(state.pset); return; }
+  }
   const keys = Object.fromEntries(Object.entries(TOOL_DEFS).map(([id, d]) => [d.key.toLowerCase(), id]));
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); step(e.shiftKey ? -5 : -1); }
@@ -508,6 +577,7 @@ function syncUI() {
   });
   $('#stage').classList.toggle('single', !state.split);
   $('#stage').classList.toggle('drawing', state.tool !== 'cursor');
+  $('#stage').classList.toggle('pointing', !!state.pset);
   $$('.tool').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === state.tool));
   $('#toolHint').textContent = TOOL_DEFS[state.tool].hint;
   $$('.sw').forEach((b) => b.setAttribute('aria-pressed', b.dataset.color === state.color));
@@ -534,7 +604,7 @@ function tickUI() {
   const sc = $('#scrub');
   sc.max = Math.max(0, p.N - 1); sc.value = f; sc.disabled = !p.media || p.N < 2;
   $('#readout').textContent = !p.media ? 'No clip' : p.media.type === 'image' ? 'Photo' : `F ${f + 1} / ${p.N} · ${(f / p.fps).toFixed(3)} s`;
-  updateMeas(); updateTrackUI();
+  updateMeas(); updateTrackUI(); updatePtUI();
 }
 
 /* ---------- main loop ---------- */
@@ -636,4 +706,4 @@ window.addEventListener('pagehide', () => { saveWork(); });
 buildTools(); buildMeas(); syncUI();
 if (document.fonts?.ready) document.fonts.ready.then(() => { dirty = true; });
 requestAnimationFrame(loop);
-window.__throwlab = { state, panes, applyLayout, runAnalysis, restored: restoreWork() };
+window.__throwlab = { state, panes, applyLayout, runAnalysis, setPset, restored: restoreWork() };

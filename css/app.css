@@ -195,3 +195,15 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .trbands{position:absolute;left:0;right:0;bottom:0;height:6px;pointer-events:none}
 .trband{position:absolute;top:0;height:6px;border-radius:3px;background:var(--accent);opacity:.85}
 .trbands.rec .trband{background:#d64545;opacity:1}
+
+/* point labeler */
+.ptsets{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.ptset{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:2px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer;color:var(--fg)}
+.ptset i{width:11px;height:11px;border-radius:50%;background:var(--c)}
+.ptset em{font:500 11px var(--f-mono);font-style:normal;color:var(--muted)}
+.ptset[aria-pressed="true"]{border-color:var(--c);box-shadow:inset 0 0 0 1px var(--c)}
+#ptPanel{border-left:3px solid var(--c,var(--line));padding-left:10px;display:flex;flex-direction:column;gap:8px}
+#ptPanel[hidden]{display:none}
+.mdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-right:7px}
+.stage.pointing canvas{cursor:crosshair}
+.ptk{position:absolute;bottom:6px;width:3px;height:9px;margin-left:-1.5px;background:var(--c);border-radius:1px}

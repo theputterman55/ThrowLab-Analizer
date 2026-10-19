@@ -82,9 +82,13 @@ function cropCanvas(media, roi) {
 // Move the Follow box so it stays centered on the person (k: 1 = jump, lower = glide). Size never changes.
 export function followBox(box, bb, k = 0.7) {
   if (!box || !bb) return box;
-  const tx = bb.cx - box.w / 2, ty = bb.cy - box.h / 2;
+  // Only follow a body that is clearly inside the box, and never by more than a fraction of the box per frame,
+  // so one bad frame (or a neighbour at the edge) cannot drag the box away from the thrower.
+  if (bb.cx < box.x || bb.cx > box.x + box.w || bb.cy < box.y || bb.cy > box.y + box.h) return box;
+  const lim = (d, m) => Math.max(-0.2 * m, Math.min(0.2 * m, d));
   const cl = (v, m) => Math.min(Math.max(0, 1 - m), Math.max(0, v));
-  return { x: cl(box.x + (tx - box.x) * k, box.w), y: cl(box.y + (ty - box.y) * k, box.h), w: box.w, h: box.h };
+  const tx = bb.cx - box.w / 2, ty = bb.cy - box.h / 2;
+  return { x: cl(box.x + lim((tx - box.x) * k, box.w), box.w), y: cl(box.y + lim((ty - box.y) * k, box.h), box.h), w: box.w, h: box.h };
 }
 
 // A tracker that stays open between frames so you can track one frame, a stretch, or step either way.
@@ -106,7 +110,9 @@ export class TrackSession {
     const map = useCrop ? (x, y) => [box.x + x * box.w, box.y + y * box.h] : (x, y) => [x, y];
     const res = this.lm.detectForVideo(input, (this.ts += 34));
     const people = (res.landmarks || []).map((l) => toFrame(l, map));
-    const pick = pickPerson(people, prev, box);
+    // With a Follow box, a body whose center is outside it is a neighbour (or a guess made from a sliver): ignore it.
+    const cand = box ? people.filter((fr) => { const b = bboxOf(fr); return b && b.cx >= box.x && b.cx <= box.x + box.w && b.cy >= box.y && b.cy <= box.y + box.h; }) : people;
+    const pick = pickPerson(cand, prev, box);
     return { frame: pick ? pick.f : null, people: people.length };
   }
 }

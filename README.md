@@ -98,3 +98,14 @@ Clips, drawings, release marks, body tracking and layout are saved in this brows
 2. Stop on the first frame of the throw and press the play button under Body tracking. Pause after the release. Only those frames are tracked.
 3. Missed a frame? Stand on the first (or last) tracked frame and press the step button beside play. The next frame is tracked and the range grows by one. Use the direction toggle to play backward.
 4. The tracked stretch is colored on the timeline. Outside it the skeleton and box are hidden. Analyze whole clip tracks every frame not yet tracked.
+
+## Point labeler
+
+For footage the tracker cannot read, place joints yourself.
+
+1. Under **Point labeler**, pick **Shoulders** or **Hips**, then click the two points on the video (throwing side first).
+2. Press **D** for the next frame, **A** to go back. The points stay where they were. When the joint moves, drag the dot (or click near the joint) to make a new keyframe.
+3. Press **Finish** (or Enter) on the last frame of the motion. Play the clip and the points move along the person. **Edit** reopens a finished set.
+4. Measurements use your points where they exist. **Use tracker's points** starts a frame from the skeleton so you only drag to fix.
+
+The Follow box only follows a body that is inside it and moves slowly, so a neighbour at the edge cannot pull it off the thrower.

@@ -92,3 +92,12 @@ export const toolsFor = (layoutId) => [...CORE_TOOLS, ...LAYOUTS[layoutId].extra
 export const FPS_CHOICES = [24, 25, 30, 48, 50, 60, 90, 100, 120, 240];
 export const COL = { A: '#5be3b5', B: '#7db8ff' };
 export const SWATCHES = [['#f2b63d', 'Amber'], ['#ff6a5c', 'Red'], ['#5be3b5', 'Mint'], ['#ffffff', 'White'], ['#c48bff', 'Violet']];
+
+// Joint sets you can place by hand (Point labeler). roles are mapped to the thrower's side with the Right/Left hand setting.
+export const POINT_SETS = {
+  shoulders: { label: 'Shoulders', color: '#ff8a3d', metric: 'shoulderTilt', roles: ['sh', 'oSh'], names: ['throwing shoulder', 'other shoulder'] },
+  hips: { label: 'Hips', color: '#4da3ff', metric: 'hipTilt', roles: ['hip', 'oHip'], names: ['throwing hip', 'other hip'] }
+};
+export const POINT_SET_ORDER = ['shoulders', 'hips'];
+// Color code shown beside each measurement (the point sets above use the same colors).
+export const METRIC_COLORS = { shoulderTilt: '#ff8a3d', hipTilt: '#4da3ff', lean: '#e6e65a', stance: '#c79bff', elbow: '#ff6b81' };

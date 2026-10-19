@@ -8,6 +8,14 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.5.0
+- Point labeler: mark joints by hand. Pick Shoulders or Hips, click the two points, press D for the next frame (A goes back). Points carry forward; drag a dot only where the joint moves. That makes a keyframe, and frames between keyframes are blended.
+- Finish (or Enter) locks the points from the first keyframe to the current frame; Edit reopens. On playback the points move along the person with a color-coded line and angle.
+- Hand-placed points feed the measurements (shoulder tilt, hip tilt, lateral lean and the rest) in place of the tracker's guess. "Use tracker's points" starts a frame from the skeleton so you only drag to fix.
+- Keyframes show as colored ticks on the timeline. Points are saved with your work and in session files.
+- Measurements have color dots matching their point sets.
+- Fix: the Follow box no longer drifts onto a neighbour. It only follows a body that is clearly inside it, moves at most 20% of its size per frame, and a body whose center is outside the box is ignored.
+
 ## 1.4.0
 - Track a shot: new play button in Body tracking. Press play on the first frame of a throw, pause after the release, and only that stretch is tracked. It turns red while tracking.
 - Step buttons either side of play move one frame and track it when it sits next to tracked frames, so you can add the frames you missed at the start or end without starting over. A direction toggle lets play track backward.

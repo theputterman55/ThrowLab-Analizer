@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.4.0';
+window.__TL_VERSION = '1.5.0';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -91,6 +91,21 @@ window.__TL_VERSION = '1.4.0';
           <p class="note" id="trRange">Stop on the first frame of the throw, press play, and pause after the release.</p>
         </div>
         <p class="note" id="anStatus">Runs on this device. Nothing is uploaded.</p>
+      </div>
+    </section>
+
+    <section id="ptSec">
+      <h3>Point labeler · <span id="ptPane">A</span></h3>
+      <p class="note">Mark joints by hand. Pick a set, click its points on the video, then press <b>D</b> for the next frame (<b>A</b> goes back). Points carry forward, so only move a dot when the joint moves.</p>
+      <div class="ptsets" id="ptSets"></div>
+      <div id="ptPanel" hidden>
+        <p class="note" id="ptHint"></p>
+        <div class="inline">
+          <button class="btn sm" id="ptDone" title="Lock the points from the first keyframe to this frame (Enter)">✓ Finish</button>
+          <button class="btn sm" id="ptSeed" title="Start this frame from the tracker's skeleton, then drag to fix">Use tracker's points</button>
+          <button class="btn sm" id="ptClear" title="Delete this set of points">Clear set</button>
+        </div>
+        <p class="note" id="ptInfo"></p>
       </div>
     </section>
 
