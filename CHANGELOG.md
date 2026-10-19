@@ -8,6 +8,11 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.9.3
+- Right panel back to the compact 1.8.1 layout (300px, Player P1/P2 with Show box / Draw / ×, Throw 1-4, sets side by side, Undo / Finish / Clear set / Rotate on one line, step bar), placed where it was between Body tracking and Layers.
+- Kept everything added since: Lock arm checkbox, Hold still / Glide switch, arm hangs from the Shoulders dot, big named angle boxes with leader lines.
+- Dim text and greyed buttons stay about 75% brighter than before.
+
 ## 1.9.2
 - New "Between keyframes" switch in the Point labeler: **Hold still** (default) keeps a line exactly where you put it until the next keyframe, so it no longer drifts across the screen as you step frames. **Glide** keeps the old behavior of sliding from one keyframe to the next. The choice is remembered.
 

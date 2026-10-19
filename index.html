@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.9.2';
+window.__TL_VERSION = '1.9.3';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -43,69 +43,6 @@ window.__TL_VERSION = '1.9.2';
   </main>
 
   <aside class="side" id="side">
-    <section id="ptSec">
-      <h3><span>Point labeler · <span id="ptPane">A</span> · <span id="ptSlotLbl">Player 1 · Throw 1</span></span><button class="btn sm" id="ptHelp" aria-pressed="false" title="Show or hide the instructions">?</button></h3>
-      <p class="note helptext">Mark joints by hand. Pick a set, click its points on the video, then step with <b>D</b> (next) and <b>A</b> (back), or the bar below. Points carry forward, so only move a dot when the joint moves. Each player and throw keeps its own points.</p>
-
-      <div class="grp" id="grpSets">
-        <span class="lbl">Point sets</span>
-        <div class="ptsets" id="ptSets"></div>
-        <span class="lbl">Between keyframes</span>
-        <div class="seg wide" id="ptBlend" role="group" aria-label="Between keyframes"><button data-b="0" aria-pressed="true" title="The line stays exactly where you put it until the next keyframe">Hold still</button><button data-b="1" aria-pressed="false" title="The line glides from one keyframe to the next">Glide</button></div>
-        <div class="ptact" id="ptActions">
-          <button class="btn sm" id="ptUndo" title="Undo the last point change (Ctrl+Z)">Undo</button>
-          <button class="btn sm" id="ptDone" title="Lock the points from the first keyframe to this frame (Enter)">✓ Finish</button>
-          <button class="btn sm" id="ptRotate" aria-pressed="false" title="Show a pin under the center dot to rotate the line (S)">Rotate (S)</button>
-          <button class="btn sm" id="ptClear" title="Delete this set of points">Clear set</button>
-          <button class="btn sm trkonly" id="ptSeed" title="Start this frame from the tracker's skeleton, then drag to fix">Use tracker's points</button>
-        </div>
-        <div id="ptPanel" hidden>
-          <p class="note" id="ptHint"></p>
-          <label class="chk" id="armLockRow" hidden title="Off: the elbow and wrist move on their own. On: dragging the elbow carries the wrist and hand with it."><input type="checkbox" id="armLock"> Lock arm (move together)</label>
-          <span class="lbl">Move or rotate applies to</span>
-          <div class="seg wide" id="ptScope" role="group" aria-label="What a move or rotation changes">
-            <button data-s="from" aria-pressed="true" title="Changes this frame and the frames after it">From this frame</button>
-            <button data-s="all" aria-pressed="false" title="Shifts every keyframe of this set by the same amount">Whole set</button>
-          </div>
-          <p class="note" id="ptRead" hidden></p>
-          <p class="note helptext" id="ptInfo"></p>
-        </div>
-      </div>
-
-<div class="grp" id="grpStep">
-        <span class="lbl">Step through the clip</span>
-        <div class="pttrans" id="ptTrans" role="group" aria-label="Step through the clip">
-          <button class="ib" id="ptStart" title="Start of the motion (first keyframe)" aria-label="Start of the motion"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
-          <button class="ib" id="ptPrevKey" title="Previous keyframe" aria-label="Previous keyframe"><svg viewBox="0 0 24 24"><path d="M12 5v14L3 12zM21 5v14l-9-7z"/></svg></button>
-          <button class="ib" id="ptBack" title="Back one frame (A)" aria-label="Back one frame"><svg viewBox="0 0 24 24"><path d="M17 5v14L7 12z"/></svg></button>
-          <button class="ib play" id="ptPlay" title="Play / pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24" id="ptPlayIcon"><path d="M7 4v16l13-8z"/></svg></button>
-          <button class="ib" id="ptFwd" title="Forward one frame (D)" aria-label="Forward one frame"><svg viewBox="0 0 24 24"><path d="M7 5v14l10-7z"/></svg></button>
-          <button class="ib" id="ptNextKey" title="Next keyframe" aria-label="Next keyframe"><svg viewBox="0 0 24 24"><path d="M12 5v14l9-7zM3 5v14l9-7z"/></svg></button>
-          <button class="ib" id="ptEnd" title="End of the motion (Finish frame)" aria-label="End of the motion"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
-        </div>
-        <p class="ptfr" id="ptFrame">No clip</p>
-        <p class="ptfr" id="ptSummary"></p>
-      </div>
-
-<div class="grp" id="grpPlayer">
-        <span class="lbl">Player</span>
-        <div class="seg wide" id="ptPlayer" role="group" aria-label="Player"><button data-p="1" aria-pressed="true" title="Player 1">P1</button><button data-p="2" aria-pressed="false" title="Player 2">P2</button></div>
-        <div class="trio">
-          <button class="btn sm boxbtn" id="boxToggle" aria-pressed="false" title="Show or hide this player's box from the current frame on">Show box</button>
-          <button class="btn sm" id="boxDraw" title="Draw this player's box (F)">Draw box</button>
-          <button class="btn sm" id="boxClear" title="Remove this player's box">Remove</button>
-        </div>
-        <p class="note" id="boxInfo"></p>
-      </div>
-
-<div class="grp" id="grpThrow">
-        <span class="lbl">Throw</span>
-        <div class="throwrow"><div class="seg" id="ptThrow" role="group" aria-label="Throw number"></div>
-        <button class="btn sm" id="ptThrowAdd" title="Add another throw">+</button></div>
-        <input type="text" id="ptNote" maxlength="140" placeholder="Describe this throw (optional)" aria-label="Description of this throw">
-      </div>
-
-    </section>
 
     <section>
       <h3>Drawing</h3>
@@ -159,6 +96,52 @@ window.__TL_VERSION = '1.9.2';
     </section>
 
     
+
+    <section id="ptSec">
+      <h3><span>Point labeler · <span id="ptPane">A</span> · <span id="ptSlotLbl">Player 1 · Throw 1</span></span><button class="btn sm" id="ptHelp" aria-pressed="false" title="Show or hide the instructions">?</button></h3>
+      <div class="slotrow">
+        <div class="seg" id="ptPlayer" role="group" aria-label="Player"><button data-p="1" aria-pressed="true" title="Player 1">P1</button><button data-p="2" aria-pressed="false" title="Player 2">P2</button></div>
+        <button class="btn sm boxbtn" id="boxToggle" aria-pressed="false" title="Show or hide this player's box from the current frame on">Show box</button>
+        <button class="btn sm" id="boxDraw" title="Draw this player's box (F)">Draw</button>
+        <button class="btn sm" id="boxClear" title="Remove this player's box">×</button></div>
+      <p class="note" id="boxInfo"></p>
+      <div class="slotrow"><span class="lbl">Throw</span>
+        <div class="seg" id="ptThrow" role="group" aria-label="Throw number"></div>
+        <button class="btn sm" id="ptThrowAdd" title="Add another throw">+</button></div>
+      <input type="text" id="ptNote" maxlength="140" placeholder="Describe this throw (optional)" aria-label="Description of this throw">
+      <p class="note helptext">Mark joints by hand. Pick a set, click its points on the video, then step with <b>D</b> (next) and <b>A</b> (back), or the bar below. Points carry forward, so only move a dot when the joint moves. Each player and throw keeps its own points.</p>
+      <div class="ptsets" id="ptSets"></div>
+      <div class="slotrow"><span class="lbl">Between keyframes</span>
+        <div class="seg" id="ptBlend" role="group" aria-label="Between keyframes"><button data-b="0" aria-pressed="true" title="The line stays exactly where you put it until the next keyframe">Hold still</button><button data-b="1" aria-pressed="false" title="The line glides from one keyframe to the next">Glide</button></div></div>
+      <div class="ptact" id="ptActions">
+        <button class="btn sm" id="ptUndo" title="Undo the last point change (Ctrl+Z)">Undo</button>
+        <button class="btn sm" id="ptDone" title="Lock the points from the first keyframe to this frame (Enter)">✓ Finish</button>
+        <button class="btn sm" id="ptClear" title="Delete this set of points">Clear set</button>
+        <button class="btn sm" id="ptRotate" aria-pressed="false" title="Show a pin under the center dot to rotate the line (S)">Rotate (S)</button>
+        <button class="btn sm trkonly" id="ptSeed" title="Start this frame from the tracker's skeleton, then drag to fix">Use tracker's points</button>
+      </div>
+      <div id="ptPanel" hidden>
+        <p class="note" id="ptHint"></p>
+        <div class="seg" id="ptScope" role="group" aria-label="What a move or rotation changes">
+          <button data-s="from" aria-pressed="true" title="Changes this frame and the frames after it">From this frame</button>
+          <button data-s="all" aria-pressed="false" title="Shifts every keyframe of this set by the same amount">Whole set</button>
+        </div>
+        <label class="chk" id="armLockRow" hidden title="Off: the elbow and wrist move on their own. On: dragging the elbow carries the wrist and hand with it."><input type="checkbox" id="armLock"> Lock arm (move together)</label>
+        <p class="note" id="ptRead" hidden></p>
+        <p class="note helptext" id="ptInfo"></p>
+      </div>
+      <div class="pttrans" id="ptTrans" role="group" aria-label="Step through the clip">
+        <button class="ib" id="ptStart" title="Start of the motion (first keyframe)" aria-label="Start of the motion"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button class="ib" id="ptPrevKey" title="Previous keyframe" aria-label="Previous keyframe"><svg viewBox="0 0 24 24"><path d="M12 5v14L3 12zM21 5v14l-9-7z"/></svg></button>
+        <button class="ib" id="ptBack" title="Back one frame (A)" aria-label="Back one frame"><svg viewBox="0 0 24 24"><path d="M17 5v14L7 12z"/></svg></button>
+        <button class="ib play" id="ptPlay" title="Play / pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24" id="ptPlayIcon"><path d="M7 4v16l13-8z"/></svg></button>
+        <button class="ib" id="ptFwd" title="Forward one frame (D)" aria-label="Forward one frame"><svg viewBox="0 0 24 24"><path d="M7 5v14l10-7z"/></svg></button>
+        <button class="ib" id="ptNextKey" title="Next keyframe" aria-label="Next keyframe"><svg viewBox="0 0 24 24"><path d="M12 5v14l9-7zM3 5v14l9-7z"/></svg></button>
+        <button class="ib" id="ptEnd" title="End of the motion (Finish frame)" aria-label="End of the motion"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      </div>
+      <p class="ptfr" id="ptFrame">No clip</p>
+      <p class="ptfr" id="ptSummary"></p>
+    </section>
 
     <section>
       <h3>Layers</h3>

@@ -242,51 +242,13 @@ html:not(.trk-on) .trkonly,html:not(.trk-on) .trband{display:none!important}
 .slotrow .seg button{padding:4px 9px}
 
 
-/* v1.8.2: larger inspector (about 25%), stacked groups, brighter dimmed text */
-.app{grid-template-columns:56px minmax(0,1fr) 380px}
-.side{font-size:17.5px;gap:18px;padding:14px;--muted:color-mix(in srgb,var(--muted) 25%,var(--fg))}
-.side h3{font-size:16px;margin-bottom:8px}
-.side .lbl{font-size:15px}
-.side .note{font-size:15.5px;line-height:1.35}
-.side .btn{font-size:16px;padding:7px 12px;border-radius:8px}
-.side .btn.sm{font-size:16px;padding:7px 12px}
-.side .ib{width:44px;height:42px}
-.side .ib svg{width:22px;height:22px}
-.side .row b{font-size:16px}
-.side .chk{padding:4px 0}
-.side .chk input{width:20px;height:20px}
-.side .moments button{padding:8px 12px;font-size:16px}
-.side .moments span:last-child{font-size:15.5px}
-.side select,.side input[type=text]{font-size:16px;padding:7px 9px}
-.side .seg button{font-size:16px;padding:7px 14px}
+/* v1.9.3: same layout as 1.8.1, brighter dimmed text, plus the newer controls */
+:root{--mutedhi:color-mix(in srgb,var(--muted) 25%,var(--fg))}
+.side{--muted:var(--mutedhi)}
+.side .lbl{color:var(--fg)}
 .side button:disabled,.side .btn:disabled,.side .ib:disabled,#ptSec button:disabled{opacity:.86;color:color-mix(in srgb,var(--fg) 55%,var(--panel2));cursor:default}
 .side .btn:disabled:hover,.side .ib:disabled:hover{background:var(--panel2)}
-
-.grp{display:flex;flex-direction:column;gap:9px;padding:11px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
-.grp>.lbl{color:var(--fg)}
-.grp .note{margin:0}
-.seg.wide{display:flex;width:100%}
-.seg.wide button{flex:1}
-.trio{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.trio .boxbtn{grid-column:1/-1}
-.throwrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.throwrow .seg{flex-wrap:wrap}
-.throwrow .seg button{padding:7px 12px}
-.ptsets{display:flex;flex-direction:column;gap:8px;margin:0}
-.ptset{width:100%;padding:9px 12px;font-size:17px;gap:10px;justify-content:flex-start}
-.ptset i{width:14px;height:14px}
-.ptset em{font-size:14px;margin-left:auto;color:var(--muted)}
-.ptact{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
-.ptact .btn{justify-content:center;padding:9px 10px;font-size:16.5px}
-#ptRotate[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
-#ptPanel{padding-left:10px;margin-top:2px;gap:9px}
-#ptScope button{font-size:15.5px;padding:8px 10px}
-#ptHelp{padding:3px 12px}
-#ptNote{width:100%;font-size:16px;padding:8px 10px;margin:0}
-.pttrans{display:flex;gap:6px;margin:0}
-.pttrans .ib{max-width:none;min-width:0;flex:1 1 0;height:44px}
-.ptfr{font-size:15px;margin:0;color:var(--muted)}
-.ptfr:empty{display:none}
-.ptk{height:11px}
-
-@media (max-width:1000px){.app{grid-template-columns:minmax(0,1fr)}}
+#armLockRow{padding:2px 0}
+#ptBlend button{padding:4px 9px;font-size:12.5px}
+.ptact .btn{flex:1 1 auto;justify-content:center}
+.ptset{flex:1 1 auto}
