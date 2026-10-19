@@ -543,7 +543,7 @@ export class Pane {
   clearSet(key) { if (!this.pts[key]) return; this.ptSnap(); delete this.pts[key]; this.ptDraft = null; this.ptChanged(); }
 
   // Angle readouts: big boxes stacked in the margin on the side of the video the player is on, each tied to its joint by a leader line.
-  drawReadouts(ctx, rd, W, H, u) {
+  drawReadouts(ctx, rd, W, H, u, ext) {
     if (!rd.length) return;
     const sc = this.k * this.vw.z, v = this.vw;
     const x0 = Math.max(0, -v.tx / sc), x1 = Math.min(W, (this.cv.width - v.tx) / sc), y0 = Math.max(0, -v.ty / sc), y1 = Math.min(H, (this.cv.height - v.ty) / sc);
@@ -561,7 +561,9 @@ export class Pane {
     const over = items[items.length - 1].y + h / 2 - (y1 - m); if (over > 0) items.forEach((it) => { it.y -= over; });
     items.forEach((it, i) => { if (i && it.y < items[i - 1].y + h + gap) it.y = items[i - 1].y + h + gap; });
     for (const it of items) {
-      const bx = left ? x0 + m : x1 - m - it.w, ex = left ? bx + it.w : bx;
+      // halfway between the edge of the picture and the player's nearest marked point, never touching the player
+      const bx = left ? Math.max(x0 + m, Math.min(x0 + m + (ext[0] - (x0 + m)) * 0.5, ext[0] - 24 * u - it.w)) : Math.min(x1 - m - it.w, Math.max(x1 - m - it.w - ((x1 - m) - ext[1]) * 0.5, ext[1] + 24 * u));
+      const ex = left ? bx + it.w : bx;
       ctx.strokeStyle = it.color; ctx.lineWidth = 2.5 * u; ctx.globalAlpha = 0.9;
       ctx.beginPath(); ctx.moveTo(ex, it.y); ctx.lineTo(it.ax, it.ay); ctx.stroke();
       ctx.beginPath(); ctx.arc(it.ax, it.ay, 5 * u, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill();
@@ -575,12 +577,13 @@ export class Pane {
   }
 
   drawManual(ctx, W, H, f, u, st) {
-    const rd = []; // readouts, stacked at the side of the video by drawReadouts
+    const rd = [], ext = [1e9, -1e9]; // readouts, stacked at the side of the video by drawReadouts; ext = left and right edge of the marked points
     for (const k of POINT_SET_ORDER) {
       const def = POINT_SETS[k], cur = this.livePts(k, f);
       const P = cur ? cur.pts : (this.ptDraft && this.ptDraft.key === k && this.ptDraft.f === f ? this.ptDraft.pts : null);
       if (!P) continue;
       const px = P.map((p) => [p[0] * W, p[1] * H]), live = st.pset === k;
+      if (cur) px.forEach(([x]) => { ext[0] = Math.min(ext[0], x); ext[1] = Math.max(ext[1], x); });
       ctx.save();
       ctx.lineCap = 'round';
       const noH = k === 'arm' && cur && this.pts.arm && this.pts.arm.noHand;
@@ -617,12 +620,12 @@ export class Pane {
       } else if (cur && def.chain && (px.length === 4 || noH)) {
         const fr = this.poseFrame(f);
         const ve = computeMetric('elbow', fr, this.media, st.hand, st.dir), vw = computeMetric('wristBend', fr, this.media, st.hand, st.dir);
-        if (ve !== null) rd.push({ label: 'Elbow', text: METRIC_DEFS.elbow.fmt(ve), color: def.segColors[0], ax: px[1][0], ay: px[1][1] });
-        if (vw !== null && !noH) rd.push({ label: 'Wrist', text: METRIC_DEFS.wristBend.fmt(vw), color: def.segColors[2], ax: px[2][0], ay: px[2][1] });
+        if (ve !== null) rd.push({ label: 'Elbow', text: METRIC_DEFS.elbow.fmt(ve), color: def.segColors[0], ax: (px[0][0] + px[1][0]) / 2, ay: (px[0][1] + px[1][1]) / 2 });
+        if (vw !== null && !noH) rd.push({ label: 'Wrist', text: METRIC_DEFS.wristBend.fmt(vw), color: def.segColors[2], ax: (px[1][0] + px[2][0]) / 2, ay: (px[1][1] + px[2][1]) / 2 });
       }
       ctx.restore();
     }
-    this.drawReadouts(ctx, rd, W, H, u);
+    this.drawReadouts(ctx, rd, W, H, u, ext);
   }
 
   metric(key, f = Math.round(this.f)) {

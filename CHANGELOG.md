@@ -8,6 +8,10 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.9.1
+- Angle boxes sit halfway between the edge of the picture and the player, never touching the marked points.
+- The Elbow leader line ends on the middle of the upper-arm line and the Wrist leader on the middle of the forearm line (the shoulder tilt one was already on the middle of the shoulder line).
+
 ## 1.9.0
 - Angle readouts are about 50% bigger, carry a name (Shoulder tilt, Elbow, Wrist, Hip tilt) and are stacked over each other in the margin of the video, on the side the player is standing (left player reads on the left, right player on the right). A colored leader line ties each box to its joint.
 
