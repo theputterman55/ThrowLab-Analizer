@@ -8,6 +8,11 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.8.4
+- Arm: new "Lock arm (move together)" checkbox in the Arm panel, off by default. Off: elbow, wrist and hand drag independently. On: dragging the elbow carries the wrist and hand, dragging the wrist carries the hand.
+- The shoulder end always stays attached to the Shoulders dot; moving the shoulder swings the arm from that point and the elbow stays where it was.
+- A dot sitting under the center move dot can now be grabbed (the elbow or wrist wins over the center dot within about 11 px).
+
 ## 1.8.3
 - Arm set hangs from the Shoulders dot: its first click is the elbow, then the wrist, then the hand. This also works on frames outside the Shoulders range (it uses the nearest shoulder keyframe).
 - Hand is optional: press Finish after the wrist to leave it out. The wrist angle then stays blank.

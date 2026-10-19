@@ -463,22 +463,32 @@ export class Pane {
     }
     this.ptVer++; this.app.requestRender();
   }
+  // Move the grabbed dot to q. With the arm locked, the dots below it on the chain (wrist, hand) travel with it.
+  dragDot(q) {
+    const d = this.pdrag, kf = this.pts[d.key]?.kf[d.f]; if (!kf) return;
+    const c01 = (n) => Math.min(1, Math.max(0, n)), dx = q[0] - d.q0[0], dy = q[1] - d.q0[1];
+    const moved = d.key === 'arm' && this.app.state.alock ? [...Array(4 - d.idx)].map((_, i) => d.idx + i) : [d.idx];
+    moved.forEach((i) => { kf[i] = i === d.idx ? [q[0], q[1]] : [c01(d.orig[i][0] + dx), c01(d.orig[i][1] + dy)]; });
+    this.ptVer++; this.app.requestRender();
+  }
   // Click or drag on the video while a point set is active.
   pointDown(e) {
     const key = this.app.state.pset, def = POINT_SETS[key]; if (!def) return;
     const f = Math.round(this.f), q = this.pt(e), cur = this.livePts(key, f);
     if (cur) {
-      const hit = this.hitHandle(e, key, f);
-      if (hit) { this.startXform(hit, key, f, q, e); return; }
       // Grab the nearest dot; a click far from any dot moves the nearest one there.
       const [cx, cy] = this.canvasXY(e), sc = this.k * this.vw.z, v = this.vw;
       let best = 0, bd = 1e9;
       cur.pts.forEach((p, j) => { if ((cur.linked && j === 0) || (j === 3 && key === 'arm' && this.pts.arm && this.pts.arm.noHand)) return; const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
+      let hit = this.hitHandle(e, key, f);
+      if (hit === 'move' && bd <= 11) hit = null; // a dot sitting under the center dot wins, so the elbow or wrist can be grabbed
+      if (hit) { this.startXform(hit, key, f, q, e); return; }
       this.ptSnap();
       const kf = this.ensureKey(key, f);
       if (!kf) { this.ptHist.pop(); return; }
-      if (bd > 30) kf[best] = [q[0], q[1]];
-      this.pdrag = { key, idx: best, f };
+      const orig = kf.map((c) => [c[0], c[1]]);
+      this.pdrag = { key, idx: best, f, orig, q0: bd > 30 ? orig[best] : q };
+      if (bd > 30) this.dragDot(q);
       try { this.cv.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       this.ptChanged();
       return;
@@ -745,8 +755,7 @@ export class Pane {
     }
     if (this.pdrag && this.pdrag.mode) { this.applyXform(e); return; }
     if (this.pdrag) {
-      const kf = this.pts[this.pdrag.key]?.kf[this.pdrag.f], q = this.pt(e);
-      if (kf) { kf[this.pdrag.idx] = [q[0], q[1]]; this.ptVer++; this.app.requestRender(); }
+      this.dragDot(this.pt(e));
       return;
     }
     if (this.pan) {
