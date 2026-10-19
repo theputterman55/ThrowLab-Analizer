@@ -370,8 +370,7 @@ $('#loadSession').onchange = async (e) => {
 $('#snap').onclick = () => {
   const p = act();
   if (!p.media) { toast('Open a clip first.'); return; }
-  p.render();
-  p.cv.toBlob((b) => b && download(b, `throwlab-${p.id}-F${Math.round(p.f) + 1}.png`), 'image/png');
+  p.snapshot((b) => b && download(b, `throwlab-${p.id}-F${Math.round(p.f) + 1}.png`));
 };
 
 /* ---------- keep pinch / Ctrl+scroll inside the app ---------- */

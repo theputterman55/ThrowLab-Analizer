@@ -49,6 +49,8 @@ export class Pane {
     // View (zoom/pan) in canvas pixels: screen = point * z + (tx, ty). hold locks it.
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null;
     this.ptrs = new Map(); this.pinch = null;
+    // vsz: size of the video in drawing units. The canvas is the whole viewing window; k fits the video inside it.
+    this.vsz = { W: 1280, H: 720 }; this.k = 1; this.dpr = 1;
     this.tmp = document.createElement('canvas');
     this.build();
   }
@@ -75,6 +77,9 @@ export class Pane {
     this.cv = el.querySelector('canvas'); this.ctx = this.cv.getContext('2d');
     this.tc = el.querySelector('.tc'); this.nameEl = el.querySelector('.pname'); this.metaEl = el.querySelector('.pmeta');
     this.emptyEl = el.querySelector('.empty'); this.view = el.querySelector('.view');
+    // The viewing window follows the pane width and the window height; the video is fitted inside it.
+    this.ro = new ResizeObserver(() => this.layout()); this.ro.observe(this.view);
+    window.addEventListener('resize', () => this.layout());
     el.addEventListener('pointerdown', () => { if (this.app.state.active !== this.id) this.app.setActive(this.id); }, true);
     this.cv.addEventListener('pointerdown', (e) => this.onDown(e));
     this.cv.addEventListener('pointermove', (e) => this.onMove(e));
@@ -163,10 +168,10 @@ export class Pane {
       return;
     }
     const s = Math.min(1, 1600 / this.media.w);
-    this.cv.width = Math.round(this.media.w * s); this.cv.height = Math.round(this.media.h * s);
+    this.vsz = { W: Math.round(this.media.w * s), H: Math.round(this.media.h * s) };
     this.f = 0; this.ann = []; this.hist = []; this.rel = null; this.roi = null; this.lens = null;
     this.raw = null; this.smoothed = null; this.poseInfo = null; this.draft = null; this.pathAnn = null;
-    this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null; this.syncZoom();
+    this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null; this.layout(); this.syncZoom();
     this.emptyEl.hidden = true;
     this.updateMeta();
     if (this.media.type === 'video') await this.seekTo(0);
@@ -242,24 +247,39 @@ export class Pane {
     const r = this.cv.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * this.cv.width, ((e.clientY - r.top) / r.height) * this.cv.height];
   }
+  // Size the viewing window and its canvas, then keep the zoom state valid.
+  layout() {
+    if (!this.cv) return;
+    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cw = this.view.clientWidth || 640;
+    const maxH = Math.max(260, window.innerHeight - (window.innerWidth <= 1000 ? 200 : 300));
+    const want = this.media ? (cw * this.vsz.H) / this.vsz.W : (cw * 9) / 16;
+    const h = Math.round(Math.min(maxH, Math.max(200, want)));
+    if (this.view.style.height !== h + 'px') this.view.style.height = h + 'px';
+    const bw = Math.round(cw * this.dpr), bh = Math.round(h * this.dpr);
+    if (this.cv.width !== bw || this.cv.height !== bh) { this.cv.width = bw; this.cv.height = bh; }
+    this.k = Math.min(bw / this.vsz.W, bh / this.vsz.H);
+    this.clampView(); this.app.requestRender();
+  }
   clampView() {
-    const v = this.vw, W = this.cv.width, H = this.cv.height;
+    const v = this.vw, cw = this.cv.width, ch = this.cv.height;
     v.z = Math.min(16, Math.max(1, v.z));
-    v.tx = Math.min(0, Math.max(W * (1 - v.z), v.tx));
-    v.ty = Math.min(0, Math.max(H * (1 - v.z), v.ty));
+    const sw = this.vsz.W * this.k * v.z, sh = this.vsz.H * this.k * v.z;
+    // A side smaller than the window is centered; a larger side can pan but never past the video edge.
+    v.tx = sw <= cw ? (cw - sw) / 2 : Math.min(0, Math.max(cw - sw, v.tx));
+    v.ty = sh <= ch ? (ch - sh) / 2 : Math.min(0, Math.max(ch - sh, v.ty));
   }
   zoomAt(cx, cy, nz) {
     if (!this.media || this.vw.hold) return;
     const v = this.vw, z0 = v.z;
-    v.z = nz; this.clampView();
-    const k = v.z / z0;
-    v.tx = cx - (cx - v.tx) * k; v.ty = cy - (cy - v.ty) * k;
+    const z1 = Math.min(16, Math.max(1, nz)), r = z1 / z0;
+    v.z = z1; v.tx = cx - (cx - v.tx) * r; v.ty = cy - (cy - v.ty) * r;
     this.clampView(); this.syncZoom(); this.app.requestRender();
   }
   zoomCenter(nz) { this.zoomAt(this.cv.width / 2, this.cv.height / 2, nz); }
   fit() {
     if (!this.media || this.vw.hold) return;
-    Object.assign(this.vw, { z: 1, tx: 0, ty: 0 }); this.syncZoom(); this.app.requestRender();
+    Object.assign(this.vw, { z: 1, tx: 0, ty: 0 }); this.clampView(); this.syncZoom(); this.app.requestRender();
   }
   setHold(on) { this.vw.hold = !!on; this.syncZoom(); }
   endPan() { if (this.pan) { this.pan = null; this.cv.style.cursor = ''; } }
@@ -276,9 +296,9 @@ export class Pane {
   }
 
   pt(e) {
-    const [cx, cy] = this.canvasXY(e), v = this.vw;
+    const [cx, cy] = this.canvasXY(e), v = this.vw, sc = this.k * v.z;
     const c = (n) => Math.min(1, Math.max(0, n));
-    return [c((cx - v.tx) / v.z / this.cv.width), c((cy - v.ty) / v.z / this.cv.height)];
+    return [c((cx - v.tx) / sc / this.vsz.W), c((cy - v.ty) / sc / this.vsz.H)];
   }
 
   commit(d) {
@@ -301,7 +321,7 @@ export class Pane {
   }
 
   eraseAt(q) {
-    const W = this.cv.width, H = this.cv.height, x = q[0] * W, y = q[1] * H, f = Math.round(this.f);
+    const W = this.vsz.W, H = this.vsz.H, x = q[0] * W, y = q[1] * H, f = Math.round(this.f);
     let best = -1, bd = (30 * (W / 1280)) / this.vw.z;
     this.ann.forEach((a, i) => {
       if (a.frame !== null && a.frame !== f) return;
@@ -403,21 +423,22 @@ export class Pane {
     if (d.type === 'pen') { if (d.pts.length > 2) this.commit(d); }
     else {
       d.pts.push(q);
-      if (Math.hypot((q[0] - d.pts[0][0]) * this.cv.width, (q[1] - d.pts[0][1]) * this.cv.height) * this.vw.z > 8) this.commit(d);
+      if (Math.hypot((q[0] - d.pts[0][0]) * this.vsz.W, (q[1] - d.pts[0][1]) * this.vsz.H) * this.k * this.vw.z / this.dpr > 8) this.commit(d);
     }
     this.app.requestRender();
   }
 
   // ---------- rendering ----------
   render() {
-    const { ctx, cv } = this, st = this.app.state, W = cv.width, H = cv.height, v = this.vw, z = v.z, u = W / 1280 / z;
+    const { ctx, cv } = this, st = this.app.state, W = this.vsz.W, H = this.vsz.H, v = this.vw, z = v.z, u = W / 1280 / z;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#0a0e0d'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0e0d'; ctx.fillRect(0, 0, cv.width, cv.height);
     if (!this.media) { this.tc.textContent = ''; return; }
     const f = Math.round(this.f);
     if (this.media.type === 'video' && !this.analyzing) this.ensureSeek();
     // Everything below is drawn in video coordinates under the zoom/pan transform.
-    ctx.setTransform(z, 0, 0, z, v.tx, v.ty);
+    const sc = this.k * z;
+    ctx.setTransform(sc, 0, 0, sc, v.tx, v.ty);
     ctx.drawImage(this.media.el, 0, 0, W, H);
     this.drawBody(ctx, W, H, f, st);
     for (const a of this.ann) if (a.frame === null || a.frame === f) drawAnn(ctx, a, W, H, f, z);
@@ -455,21 +476,21 @@ export class Pane {
   }
 
   drawLens(ctx, W, H, u) {
-    const L = this.lens, v = this.vw, sx = L.x * W, sy = L.y * H, sw = L.w * W, sh = L.h * H;
+    const L = this.lens, v = this.vw, cv = this.cv, sx = L.x * W, sy = L.y * H, sw = L.w * W, sh = L.h * H;
     ctx.save();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * u; ctx.strokeRect(sx, sy, sw, sh);
     // The corner window is drawn in screen space, copying what is currently visible inside the box.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const u0 = W / 1280;
-    const mx = sx * v.z + v.tx, my = sy * v.z + v.ty, mw = sw * v.z, mh = sh * v.z;
-    let iw = W * 0.36, ih = (iw * sh) / sw;
-    if (ih > H * 0.6) { ih = H * 0.6; iw = (ih * sw) / sh; }
-    const ix = W - iw - 16 * u0, iy = H - ih - 16 * u0;
-    if (mw > 1 && mh > 1 && mx < W && my < H && mx + mw > 0 && my + mh > 0) {
+    const sc = this.k * v.z, d = this.dpr;
+    const mx = sx * sc + v.tx, my = sy * sc + v.ty, mw = sw * sc, mh = sh * sc;
+    let iw = cv.width * 0.3, ih = (iw * sh) / sw;
+    if (ih > cv.height * 0.5) { ih = cv.height * 0.5; iw = (ih * sw) / sh; }
+    const ix = cv.width - iw - 16 * d, iy = cv.height - ih - 16 * d;
+    if (mw > 1 && mh > 1 && mx < cv.width && my < cv.height && mx + mw > 0 && my + mh > 0) {
       this.tmp.width = Math.max(1, Math.round(iw)); this.tmp.height = Math.max(1, Math.round(ih));
-      this.tmp.getContext('2d').drawImage(this.cv, mx, my, mw, mh, 0, 0, this.tmp.width, this.tmp.height);
+      this.tmp.getContext('2d').drawImage(cv, mx, my, mw, mh, 0, 0, this.tmp.width, this.tmp.height);
       ctx.drawImage(this.tmp, ix, iy);
-      ctx.lineWidth = 3 * u0; ctx.strokeRect(ix, iy, iw, ih);
+      ctx.lineWidth = 3 * d; ctx.strokeRect(ix, iy, iw, ih);
     }
     ctx.restore();
   }
@@ -527,6 +548,18 @@ export class Pane {
         ctx.restore();
       }
     }
+  }
+
+  // PNG of the visible part of the video (without the black window around it).
+  snapshot(cb) {
+    this.render();
+    const v = this.vw, cv = this.cv, sc = this.k * v.z;
+    const x0 = Math.max(0, v.tx), y0 = Math.max(0, v.ty);
+    const x1 = Math.min(cv.width, v.tx + this.vsz.W * sc), y1 = Math.min(cv.height, v.ty + this.vsz.H * sc);
+    const w = Math.max(1, Math.round(x1 - x0)), h = Math.max(1, Math.round(y1 - y0));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(cv, x0, y0, w, h, 0, 0, w, h);
+    c.toBlob(cb, 'image/png');
   }
 
   // ---------- save / load ----------
