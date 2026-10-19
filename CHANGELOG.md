@@ -8,6 +8,9 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.9.0
+- Angle readouts are about 50% bigger, carry a name (Shoulder tilt, Elbow, Wrist, Hip tilt) and are stacked over each other in the margin of the video, on the side the player is standing (left player reads on the left, right player on the right). A colored leader line ties each box to its joint.
+
 ## 1.8.5
 - Arm and Shoulders stay connected on every frame, including frames past where the Shoulders set was finished (the arm hangs from the nearest shoulder keyframe).
 - In Arm mode you can now drag the arm's shoulder end. It moves the Shoulders throwing-shoulder dot on that frame, so the two always move together. Past the end of the Shoulders set this adds a shoulder keyframe and stretches the set to that frame.

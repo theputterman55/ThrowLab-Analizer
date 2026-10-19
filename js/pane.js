@@ -542,7 +542,40 @@ export class Pane {
   }
   clearSet(key) { if (!this.pts[key]) return; this.ptSnap(); delete this.pts[key]; this.ptDraft = null; this.ptChanged(); }
 
+  // Angle readouts: big boxes stacked in the margin on the side of the video the player is on, each tied to its joint by a leader line.
+  drawReadouts(ctx, rd, W, H, u) {
+    if (!rd.length) return;
+    const sc = this.k * this.vw.z, v = this.vw;
+    const x0 = Math.max(0, -v.tx / sc), x1 = Math.min(W, (this.cv.width - v.tx) / sc), y0 = Math.max(0, -v.ty / sc), y1 = Math.min(H, (this.cv.height - v.ty) / sc);
+    const left = rd.reduce((s, r) => s + r.ax, 0) / rd.length < (x0 + x1) / 2; // left player reads on the left, right player on the right
+    const fs = 30 * u, h = 46 * u, gap = 8 * u, m = 14 * u;
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    const items = [...rd].sort((a, b) => a.ay - b.ay).map((r) => {
+      ctx.font = `500 ${Math.round(fs * 0.7)}px 'Barlow', system-ui, sans-serif`; const wl = ctx.measureText(r.label.toUpperCase()).width;
+      ctx.font = `700 ${Math.round(fs)}px 'JetBrains Mono', ui-monospace, monospace`; const wv = ctx.measureText(r.text).width;
+      return { ...r, wl, wv, w: wl + wv + 36 * u, y: r.ay };
+    });
+    // spread top to bottom so the boxes never overlap, then pull the stack back inside the picture
+    items.forEach((it, i) => { it.y = Math.max(it.y, y0 + m + h / 2); if (i) it.y = Math.max(it.y, items[i - 1].y + h + gap); });
+    const over = items[items.length - 1].y + h / 2 - (y1 - m); if (over > 0) items.forEach((it) => { it.y -= over; });
+    items.forEach((it, i) => { if (i && it.y < items[i - 1].y + h + gap) it.y = items[i - 1].y + h + gap; });
+    for (const it of items) {
+      const bx = left ? x0 + m : x1 - m - it.w, ex = left ? bx + it.w : bx;
+      ctx.strokeStyle = it.color; ctx.lineWidth = 2.5 * u; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.moveTo(ex, it.y); ctx.lineTo(it.ax, it.ay); ctx.stroke();
+      ctx.beginPath(); ctx.arc(it.ax, it.ay, 5 * u, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(0,0,0,.78)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, it.y - h / 2, it.w, h, 8 * u) : ctx.rect(bx, it.y - h / 2, it.w, h); ctx.fill();
+      ctx.lineWidth = 2.5 * u; ctx.strokeStyle = it.color; ctx.stroke();
+      ctx.textAlign = 'left'; ctx.fillStyle = it.color; ctx.font = `500 ${Math.round(fs * 0.7)}px 'Barlow', system-ui, sans-serif`; ctx.fillText(it.label.toUpperCase(), bx + 14 * u, it.y + 1);
+      ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(fs)}px 'JetBrains Mono', ui-monospace, monospace`; ctx.fillText(it.text, bx + 22 * u + it.wl, it.y + 1);
+    }
+    ctx.restore();
+  }
+
   drawManual(ctx, W, H, f, u, st) {
+    const rd = []; // readouts, stacked at the side of the video by drawReadouts
     for (const k of POINT_SET_ORDER) {
       const def = POINT_SETS[k], cur = this.livePts(k, f);
       const P = cur ? cur.pts : (this.ptDraft && this.ptDraft.key === k && this.ptDraft.f === f ? this.ptDraft.pts : null);
@@ -580,15 +613,16 @@ export class Pane {
       }
       if (cur && !def.chain && px.length === 2) {
         const v = computeMetric(def.metric, this.poseFrame(f), this.media, st.hand, st.dir);
-        if (v !== null) tag(ctx, METRIC_DEFS[def.metric].fmt(v), (px[0][0] + px[1][0]) / 2, Math.min(px[0][1], px[1][1]) - 26 * u, u);
+        if (v !== null) rd.push({ label: METRIC_DEFS[def.metric].label, text: METRIC_DEFS[def.metric].fmt(v), color: def.color, ax: (px[0][0] + px[1][0]) / 2, ay: (px[0][1] + px[1][1]) / 2 });
       } else if (cur && def.chain && (px.length === 4 || noH)) {
         const fr = this.poseFrame(f);
         const ve = computeMetric('elbow', fr, this.media, st.hand, st.dir), vw = computeMetric('wristBend', fr, this.media, st.hand, st.dir);
-        if (ve !== null) tag(ctx, METRIC_DEFS.elbow.fmt(ve), px[1][0] + 44 * u, px[1][1] - 20 * u, u);
-        if (vw !== null) tag(ctx, METRIC_DEFS.wristBend.fmt(vw), px[2][0] + 44 * u, px[2][1] + 22 * u, u);
+        if (ve !== null) rd.push({ label: 'Elbow', text: METRIC_DEFS.elbow.fmt(ve), color: def.segColors[0], ax: px[1][0], ay: px[1][1] });
+        if (vw !== null && !noH) rd.push({ label: 'Wrist', text: METRIC_DEFS.wristBend.fmt(vw), color: def.segColors[2], ax: px[2][0], ay: px[2][1] });
       }
       ctx.restore();
     }
+    this.drawReadouts(ctx, rd, W, H, u);
   }
 
   metric(key, f = Math.round(this.f)) {
