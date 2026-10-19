@@ -91,3 +91,10 @@ The version shows beside the ThrowLab name. It is MAJOR.MINOR.PATCH: a new featu
 ## Saved work
 
 Clips, drawings, release marks, body tracking and layout are saved in this browser (IndexedDB) as you work and restored on refresh or after an app update. Turn it off or clear it under **Saved work** in the side panel. Nothing is uploaded. Clearing browser site data deletes it.
+
+## Track a shot
+
+1. Draw a Follow player box (F) around the thrower when several people are in view.
+2. Stop on the first frame of the throw and press the play button under Body tracking. Pause after the release. Only those frames are tracked.
+3. Missed a frame? Stand on the first (or last) tracked frame and press the step button beside play. The next frame is tracked and the range grows by one. Use the direction toggle to play backward.
+4. The tracked stretch is colored on the timeline. Outside it the skeleton and box are hidden. Analyze whole clip tracks every frame not yet tracked.

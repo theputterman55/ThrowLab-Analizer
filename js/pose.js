@@ -43,7 +43,7 @@ function toFrame(landmarks, map) {
   return out;
 }
 
-function bboxOf(frame) {
+export function bboxOf(frame) {
   let x0 = 1, y0 = 1, x1 = 0, y1 = 0, n = 0;
   for (let i = 0; i < 33; i++) {
     if (frame[i * 3 + 2] < 0.3) continue;
@@ -54,7 +54,7 @@ function bboxOf(frame) {
 }
 
 // Choose which detected person is the thrower.
-function pickPerson(people, prev, roi) {
+export function pickPerson(people, prev, roi) {
   const cand = people.map((f) => ({ f, b: bboxOf(f) })).filter((c) => c.b);
   if (!cand.length) return null;
   if (prev) {
@@ -77,6 +77,38 @@ function cropCanvas(media, roi) {
   const c = document.createElement('canvas');
   c.width = Math.round(rw * scale); c.height = Math.round(rh * scale);
   return { c, ctx: c.getContext('2d') };
+}
+
+// Move the Follow box so it stays centered on the person (k: 1 = jump, lower = glide). Size never changes.
+export function followBox(box, bb, k = 0.7) {
+  if (!box || !bb) return box;
+  const tx = bb.cx - box.w / 2, ty = bb.cy - box.h / 2;
+  const cl = (v, m) => Math.min(Math.max(0, 1 - m), Math.max(0, v));
+  return { x: cl(box.x + (tx - box.x) * k, box.w), y: cl(box.y + (ty - box.y) * k, box.h), w: box.w, h: box.h };
+}
+
+// A tracker that stays open between frames so you can track one frame, a stretch, or step either way.
+// Timestamps only ever go up (the tracker requires it), whichever direction the video is stepped.
+export class TrackSession {
+  constructor(lm, key) { this.lm = lm; this.key = key; this.ts = 0; this.crop = null; this.cropKey = ''; }
+  static async create(model) { return new TrackSession(await createLandmarker({ model, mode: 'VIDEO', numPoses: 3 }), model); }
+  close() { try { this.lm.close(); } catch (_) { /* ignore */ } }
+  // Find the person in the pane's current video frame. box: Follow box or null. prev: where they were just before.
+  detect(pane, box, prev, zoomCrop) {
+    const media = pane.media, useCrop = !!(box && zoomCrop);
+    let input = media.el;
+    if (useCrop) {
+      const key = box.w.toFixed(4) + 'x' + box.h.toFixed(4);
+      if (!this.crop || this.cropKey !== key) { this.crop = cropCanvas(media, box); this.cropKey = key; }
+      this.crop.ctx.drawImage(media.el, box.x * media.w, box.y * media.h, box.w * media.w, box.h * media.h, 0, 0, this.crop.c.width, this.crop.c.height);
+      input = this.crop.c;
+    }
+    const map = useCrop ? (x, y) => [box.x + x * box.w, box.y + y * box.h] : (x, y) => [x, y];
+    const res = this.lm.detectForVideo(input, (this.ts += 34));
+    const people = (res.landmarks || []).map((l) => toFrame(l, map));
+    const pick = pickPerson(people, prev, box);
+    return { frame: pick ? pick.f : null, people: people.length };
+  }
 }
 
 // Runs the tracker over every frame. Returns { frames, maxPeople }; frames has one entry per frame: Float32Array(99) or null.

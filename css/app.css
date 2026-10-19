@@ -180,3 +180,18 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   .pname{max-width:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* body tracker transport */
+.trk{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px dashed var(--line)}
+.trk-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.trk-read{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.trk-read b{font:600 14px var(--f-mono);font-variant-numeric:tabular-nums}
+.trk-badge{font:600 11px var(--f-display);letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.trk-badge.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ib.play.rec{background:#d64545;border-color:#d64545;color:#fff;animation:recpulse 1.2s ease-in-out infinite}
+@keyframes recpulse{50%{box-shadow:0 0 0 4px rgba(214,69,69,.28)}}
+@media (prefers-reduced-motion:reduce){.ib.play.rec{animation:none}}
+.ib:disabled{opacity:.4;cursor:not-allowed}
+.trbands{position:absolute;left:0;right:0;bottom:0;height:6px;pointer-events:none}
+.trband{position:absolute;top:0;height:6px;border-radius:3px;background:var(--accent);opacity:.85}
+.trbands.rec .trband{background:#d64545;opacity:1}

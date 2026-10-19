@@ -8,6 +8,14 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.4.0
+- Track a shot: new play button in Body tracking. Press play on the first frame of a throw, pause after the release, and only that stretch is tracked. It turns red while tracking.
+- Step buttons either side of play move one frame and track it when it sits next to tracked frames, so you can add the frames you missed at the start or end without starting over. A direction toggle lets play track backward.
+- Frame counter and tracked-range readout (Frame 22 / 120, Tracked 20-58). Tracked stretches are colored on the timeline bar and the video shows "tracked / not tracked".
+- The Follow player box now only shows on tracked frames and follows the thrower from frame to frame.
+- "Analyze body" is now "Analyze whole clip" and skips frames already tracked.
+- Saved sessions and auto-saved work keep the tracked ranges and boxes.
+
 ## 1.3.1
 - Fix: the main script is now version-stamped too, so an update can never serve an old copy of it.
 

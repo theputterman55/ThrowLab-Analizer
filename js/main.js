@@ -1,6 +1,5 @@
 import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION } from './config.js';
 import { Pane } from './pane.js';
-import { analyze } from './pose.js';
 import { METRIC_DEFS, suggestRelease } from './metrics.js';
 import * as store from './store.js';
 
@@ -107,7 +106,7 @@ function updateMeas() {
   $('#measPane').textContent = p.id;
   const has = !!p.poseFrame();
   $('#measNote').hidden = has;
-  $('#measNote').textContent = !p.media ? 'Open a clip, then run Analyze body.' : p.raw ? 'No body found on this frame.' : 'Run Analyze body to fill these in.';
+  $('#measNote').textContent = !p.media ? 'Open a clip, then track a shot.' : p.hasTracking() ? (p.tr[Math.round(p.f)] ? 'No body found on this frame.' : 'This frame is not tracked. Step next to the tracked frames, or press the tracker play.') : 'Track a shot (Body tracking panel) to fill these in.';
   LAYOUTS[state.layout].metrics.forEach((m) => {
     const v = has ? p.metric(m.k) : null;
     $('#m-' + m.k).textContent = v === null ? '—' : METRIC_DEFS[m.k].fmt(v);
@@ -143,7 +142,7 @@ function buildMoments() {
   mo.innerHTML = '';
   if (p.rel === null) {
     const n = document.createElement('p');
-    n.className = 'note'; n.textContent = 'Step to the release frame and press Mark release, or run Analyze body and press Suggest release.';
+    n.className = 'note'; n.textContent = 'Step to the release frame and press Mark release, or track the throw and press Suggest release.';
     mo.appendChild(n);
   } else {
     const b = document.createElement('button');
@@ -152,7 +151,7 @@ function buildMoments() {
     mo.appendChild(b);
   }
   const tk = $('#ticks');
-  tk.innerHTML = '';
+  tk.querySelectorAll('.tick').forEach((x) => x.remove());
   if (p.rel !== null && p.N > 1) {
     const b = document.createElement('button');
     b.className = 'tick'; b.title = `Release · F ${p.rel + 1}`; b.setAttribute('aria-label', b.title);
@@ -234,50 +233,134 @@ $('#splitBtn').onclick = () => {
   syncUI(); dirty = true;
 };
 
-/* ---------- analysis ---------- */
-let abort = null;
-async function runAnalysis() {
+/* ---------- body tracking: track a shot, step, extend ---------- */
+let trRun = null;       // the tracking run in progress: { ctl, pane, whole }
+let trBusy = false;     // a single step is being tracked
+let trDir = 1;          // which way Play tracks
+const tick0 = () => new Promise((r) => setTimeout(r, 0));
+const rangeText = (p) => p.ranges().map(([a, b]) => (a === b ? `${a + 1}` : `${a + 1}–${b + 1}`)).join(', ');
+
+function stopTrack() { trRun?.ctl.abort(); }
+
+// Track frames one after another from `start`, going `dir`, until stopped or the clip ends.
+// Frames already tracked are stepped over, not redone. whole: the "Analyze whole clip" run.
+async function runTrack({ start, dir, whole = false }) {
   const p = act();
   if (!p.media) { toast('Open a clip first.'); return; }
-  abort = new AbortController();
+  if (trRun || trBusy) return;
+  state.playing = false;
+  const ctl = new AbortController();
+  trRun = { ctl, pane: p, whole };
   p.analyzing = true;
   const prevF = Math.round(p.f);
-  $('#analyze').disabled = true; $('#cancelAn').hidden = false;
-  const bar = $('#anBar'); bar.hidden = false; bar.value = 0;
-  const status = $('#anStatus');
+  const bar = $('#anBar'), status = $('#anStatus');
+  bar.hidden = !whole; bar.value = 0; $('#cancelAn').hidden = !whole;
   status.textContent = 'Starting the body tracker…';
+  syncUI();
+  let done = 0, found = 0, many = 0;
   try {
-    let found = 0;
-    const roi = p.roi;
-    const res = await analyze(p, {
-      model: state.model, roi, zoomCrop: state.zoomCrop, signal: abort.signal,
-      onProgress: (i, n, ok) => { if (ok) found++; bar.value = i / n; status.textContent = `Frame ${i} of ${n} · body found in ${found}`; dirty = true; }
-    });
-    const raw = res.frames;
-    p.setPose(raw, { model: state.model, roi: p.roi, zoomCrop: state.zoomCrop, fps: p.fps });
-    const n = raw.filter(Boolean).length;
-    if (!n) status.textContent = 'No body was found. Try the Follow player box, or the Most accurate model.';
-    else {
-      let extra = '';
-      if (p.rel === null && p.media.type === 'video') {
-        const s = suggestRelease(p.smoothed, p.media, state.hand);
-        if (s >= 0) { p.rel = s; extra = ` Release suggested at F ${s + 1}. Move it with Mark release if it is off.`; }
-      }
-      const many = !roi && res.maxPeople > 1 ? ' Several people were in view. Draw a Follow player box (F) and analyze again to lock onto the thrower.' : '';
-      status.textContent = `Done. Body found in ${n} of ${raw.length} frames.${extra}${many}`;
+    await p.getSession();
+    let f = clamp(start ?? Math.round(p.f), 0, p.N - 1);
+    while (!ctl.signal.aborted) {
+      if (!p.tr?.[f]) {
+        const r = await p.trackAt(f, dir);
+        done++; if (r.frame) found++; many = Math.max(many, r.people);
+      } else if (p.media.type === 'video') await p.seekTo(f);
+      p.f = f;
+      if (whole) bar.value = (f + 1) / p.N;
+      status.textContent = `Tracking frame ${f + 1} · ${done} new · body found in ${found}`;
+      drawBands(); dirty = true;
+      const nf = f + dir;
+      if (nf < 0 || nf >= p.N) break;
+      f = nf;
+      await tick0();
     }
+    let msg = ctl.signal.aborted && !whole ? 'Paused. ' : '';
+    if (!done && !found) msg += p.hasTracking() ? 'No new frames needed tracking.' : 'No frames were tracked.';
+    else if (!found) msg += 'No body was found. Try the Follow player box (F), or the Most accurate model.';
+    else {
+      msg += `Tracked ${done} new frame${done === 1 ? '' : 's'}, body found in ${found}. Tracked: ${rangeText(p)}.`;
+      if (p.rel === null && p.media.type === 'video' && p.trCount >= 8) {
+        const s = suggestRelease(p.smoothed, p.media, state.hand);
+        if (s >= 0) { p.rel = s; msg += ` Release suggested at F ${s + 1}.`; }
+      }
+      if (!p.roi && many > 1) msg += ' Several people were in view. Draw a Follow player box (F) around the thrower and track again.';
+    }
+    status.textContent = msg;
   } catch (e) {
-    status.textContent = e.name === 'AbortError' ? 'Cancelled.' : `The tracker could not run: ${e.message || e}`;
+    status.textContent = `The tracker could not run: ${e.message || e}`;
   } finally {
-    p.analyzing = false; abort = null;
-    if (p.media.type === 'video') { p.f = prevF; await p.seekTo(prevF); }
-    $('#analyze').disabled = false; $('#cancelAn').hidden = true; bar.hidden = true;
+    p.analyzing = false; trRun = null;
+    if (whole && p.media.type === 'video') { p.f = prevF; await p.seekTo(prevF); }
+    bar.hidden = true; $('#cancelAn').hidden = true;
     syncUI(); dirty = true;
   }
 }
+
+// One frame back or forward. Next to tracked frames it is tracked too, so the range grows by one.
+async function trStep(d) {
+  const p = act();
+  if (!p.media || p.N < 2) return;
+  if (trRun) { stopTrack(); return; }
+  if (trBusy) return;
+  const f = Math.round(p.f), t = clamp(f + d, 0, p.N - 1);
+  if (t === f) return;
+  trBusy = true; p.analyzing = true; state.playing = false;
+  const status = $('#anStatus');
+  try {
+    if (!p.hasTracking()) { status.textContent = 'Starting the body tracker…'; await p.trackAt(f, d); } // first press: start here
+    if (p.tr?.[f] && !p.tr[t]) { await p.trackAt(t, d); status.textContent = `Tracked: ${rangeText(p)}.`; }
+    else { p.f = t; if (p.media.type === 'video') await p.seekTo(t); }
+    p.f = t;
+  } catch (e) { status.textContent = `The tracker could not run: ${e.message || e}`; }
+  finally { p.analyzing = false; trBusy = false; syncUI(); dirty = true; }
+}
+function trPlay() {
+  if (trRun) { stopTrack(); return; }
+  runTrack({ start: Math.round(act().f), dir: trDir });
+}
+const runAnalysis = () => runTrack({ start: 0, dir: 1, whole: true });
+
+// Color the tracked stretches on the timeline. Red while the tracker is running.
+function drawBands() {
+  const p = act(), box = $('#trbands');
+  box.innerHTML = '';
+  box.classList.toggle('rec', !!trRun);
+  if (!p.media || p.N < 2) return;
+  for (const [a, b] of p.ranges()) {
+    const d = document.createElement('div');
+    d.className = 'trband';
+    d.style.left = `calc(8px + (100% - 16px) * ${a / (p.N - 1)})`;
+    d.style.width = `max(4px, calc((100% - 16px) * ${(b - a) / (p.N - 1)}))`;
+    box.appendChild(d);
+  }
+}
+function updateTrackUI() {
+  const p = act(), f = Math.round(p.f), on = !!p.media, vid = on && p.N > 1;
+  $('#trFrame').textContent = on ? `Frame ${f + 1} / ${p.N}` : 'Frame – / –';
+  const here = $('#trHere');
+  if (on && p.hasTracking()) { here.textContent = p.tr[f] ? 'tracked' : 'not tracked'; here.classList.toggle('on', !!p.tr[f]); }
+  else { here.textContent = ''; here.classList.remove('on'); }
+  if (!trRun && !trBusy) $('#trRange').textContent = !on ? 'Open a clip first.'
+    : p.hasTracking() ? `Tracked frames: ${rangeText(p)} (${p.trCount} of ${p.N}). Step beside this range to add frames.`
+      : 'Stop on the first frame of the throw, press play, and pause after the release.';
+  const rec = !!trRun && !trRun.whole;
+  $('#trPlay').classList.toggle('rec', rec);
+  $('#trPlay').setAttribute('aria-label', rec ? 'Stop tracking' : 'Track while playing');
+  $('#trIcon').innerHTML = rec ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
+  $('#trPlay').disabled = !on || (!!trRun && trRun.whole);
+  $('#trPrev').disabled = !vid || !!trRun?.whole; $('#trNext').disabled = !vid || !!trRun?.whole;
+  $('#trDir').textContent = trDir > 0 ? 'Play: forward →' : 'Play: ← backward';
+  $('#trDir').disabled = !!trRun;
+  $('#analyze').disabled = !on || !!trRun || trBusy;
+}
 $('#analyze').onclick = runAnalysis;
-$('#cancelAn').onclick = () => abort?.abort();
-$('#clearPose').onclick = () => { const p = act(); p.raw = null; p.smoothed = null; p.poseInfo = null; $('#anStatus').textContent = 'Tracking cleared.'; syncUI(); dirty = true; };
+$('#cancelAn').onclick = stopTrack;
+$('#trPlay').onclick = trPlay;
+$('#trPrev').onclick = () => trStep(-1);
+$('#trNext').onclick = () => trStep(1);
+$('#trDir').onclick = () => { trDir = -trDir; updateTrackUI(); };
+$('#clearPose').onclick = () => { stopTrack(); const p = act(); p.clearPose(); $('#anStatus').textContent = 'Tracking cleared.'; syncUI(); dirty = true; };
 $('#model').value = state.model; $('#smooth').value = String(state.smooth); $('#zoomCrop').checked = state.zoomCrop;
 $('#model').onchange = (e) => { state.model = e.target.value; savePrefs(); };
 $('#smooth').onchange = (e) => { state.smooth = +e.target.value; panes.forEach((p) => p.rebuildSmooth()); savePrefs(); syncUI(); dirty = true; };
@@ -285,7 +368,7 @@ $('#zoomCrop').onchange = (e) => { state.zoomCrop = e.target.checked; savePrefs(
 
 $('#suggest').onclick = () => {
   const p = act();
-  if (!p.smoothed) { toast('Run Analyze body first.'); return; }
+  if (!p.smoothed) { toast('Track a shot first.'); return; }
   const s = suggestRelease(p.smoothed, p.media, state.hand);
   if (s < 0) { toast('Could not find the throwing wrist. Try the Follow player box.'); return; }
   p.rel = s; p.f = s; syncUI(); dirty = true;
@@ -298,16 +381,17 @@ $('#clearBox').onclick = () => { const p = act(); p.roi = null; p.lens = null; d
 
 /* ---------- transport ---------- */
 function step(d) {
-  state.playing = false;
+  stopTrack(); state.playing = false;
   targets().forEach((p) => { if (p.media) p.f = clamp(Math.round(p.f) + d, 0, p.N - 1); });
   syncUI(); dirty = true;
 }
 function goTo(which) {
-  state.playing = false;
+  stopTrack(); state.playing = false;
   targets().forEach((p) => { if (p.media) p.f = which === 'first' ? 0 : p.N - 1; });
   syncUI(); dirty = true;
 }
 function togglePlay() {
+  stopTrack();
   const list = targets().filter((p) => p.media?.type === 'video');
   if (!list.length) return;
   state.playing = !state.playing;
@@ -336,6 +420,7 @@ $('#fps').onchange = (e) => {
   if (p.media?.type === 'video') { p.setFps(v); syncUI(); dirty = true; }
 };
 $('#scrub').oninput = (e) => {
+  stopTrack();
   const p = act(), d = +e.target.value - Math.round(p.f);
   state.playing = false;
   targets().forEach((q) => { if (q.media) q.f = clamp(Math.round(q.f) + d, 0, q.N - 1); });
@@ -436,13 +521,12 @@ function syncUI() {
   $('#playIcon').innerHTML = state.playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
   $('#bPlay').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
   $('#anPane').textContent = p.id;
-  $('#analyze').disabled = !p.media || p.analyzing;
-  $('#clearPose').disabled = !p.raw;
-  $('#suggest').disabled = !p.raw;
+  $('#clearPose').disabled = !p.hasTracking();
+  $('#suggest').disabled = !p.hasTracking();
   $('#fps').disabled = p.media?.type !== 'video';
   if (p.media) $('#fps').value = String(p.fps);
   $('#annCount').textContent = `${p.ann.length} on clip ${p.id}`;
-  buildMoments(); updateCompare(); tickUI();
+  buildMoments(); drawBands(); updateCompare(); tickUI();
 }
 
 function tickUI() {
@@ -450,7 +534,7 @@ function tickUI() {
   const sc = $('#scrub');
   sc.max = Math.max(0, p.N - 1); sc.value = f; sc.disabled = !p.media || p.N < 2;
   $('#readout').textContent = !p.media ? 'No clip' : p.media.type === 'image' ? 'Photo' : `F ${f + 1} / ${p.N} · ${(f / p.fps).toFixed(3)} s`;
-  updateMeas();
+  updateMeas(); updateTrackUI();
 }
 
 /* ---------- main loop ---------- */

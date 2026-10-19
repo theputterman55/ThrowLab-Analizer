@@ -1,7 +1,7 @@
 // One video (or photo) pane: media, frame stepping, drawing, body overlay.
 import { drawAnn, annDist } from './annotate.js';
 import { COL, FPS_CHOICES } from './config.js';
-import { smoothFrames, packFrames, unpackFrames } from './pose.js';
+import { smoothFrames, packFrames, unpackFrames, TrackSession, bboxOf, followBox } from './pose.js';
 import { roleIndex, throwingWristIndex, computeMetric, angle3 } from './metrics.js';
 
 const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [27, 31], [28, 32], [27, 29], [28, 30], [15, 19], [16, 20]];
@@ -45,6 +45,7 @@ export class Pane {
     this.ann = []; this.hist = []; this.draft = null; this.pathAnn = null;
     this.rel = null; this.roi = null; this.lens = null;
     this.raw = null; this.smoothed = null; this.poseInfo = null;
+    this.tr = null; this.boxes = null; this.trCount = 0; this.session = null; // tr[f] = 1 where the body tracker has run
     this.analyzing = false; this.seeking = false;
     // View (zoom/pan) in canvas pixels: screen = point * z + (tx, ty). hold locks it.
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null;
@@ -132,6 +133,7 @@ export class Pane {
   release() {
     if (this.url) URL.revokeObjectURL(this.url);
     if (this.media?.type === 'video') this.media.el.remove();
+    this.closeSession(); this.clearPose();
     this.url = null; this.media = null;
   }
 
@@ -171,7 +173,7 @@ export class Pane {
     const s = Math.min(1, 1600 / this.media.w);
     this.vsz = { W: Math.round(this.media.w * s), H: Math.round(this.media.h * s) };
     this.f = 0; this.ann = []; this.hist = []; this.rel = null; this.roi = null; this.lens = null;
-    this.raw = null; this.smoothed = null; this.poseInfo = null; this.draft = null; this.pathAnn = null;
+    this.clearPose(); this.draft = null; this.pathAnn = null;
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null; this.layout(); this.syncZoom();
     this.emptyEl.hidden = true;
     this.updateMeta();
@@ -193,7 +195,7 @@ export class Pane {
     this.fps = fps; this.fpsSource = 'set';
     this.N = Math.max(1, Math.round(this.media.dur * fps));
     this.f = Math.min(this.f, this.N - 1);
-    this.raw = null; this.smoothed = null; this.poseInfo = null;
+    this.clearPose();
     this.updateMeta();
   }
 
@@ -226,9 +228,61 @@ export class Pane {
   }
 
   // ---------- body data ----------
-  setPose(raw, info) {
+  // Load saved tracking. extra.ranges = tracked frame ranges, extra.boxes = the Follow box used on each frame.
+  setPose(raw, info, extra) {
     this.raw = raw; this.poseInfo = info || null;
+    this.tr = new Uint8Array(raw.length);
+    if (extra?.ranges) { for (const [a, b] of extra.ranges) for (let i = a; i <= b && i < raw.length; i++) this.tr[i] = 1; } else this.tr.fill(1);
+    this.boxes = extra?.boxes ? extra.boxes.map((q) => (q ? { x: q[0], y: q[1], w: q[2], h: q[3] } : null)) : new Array(raw.length).fill(null);
+    this.recount(); this.rebuildSmooth();
+  }
+  recount() { let n = 0; if (this.tr) for (const v of this.tr) n += v; this.trCount = n; }
+  hasTracking() { return this.trCount > 0; }
+  ensurePose() {
+    if (this.raw && this.raw.length === this.N) return;
+    this.raw = new Array(this.N).fill(null); this.tr = new Uint8Array(this.N); this.boxes = new Array(this.N).fill(null); this.trCount = 0;
+  }
+  clearPose() { this.raw = null; this.smoothed = null; this.poseInfo = null; this.tr = null; this.boxes = null; this.trCount = 0; }
+  // Store the result for one frame (frame may be null: tracked, nobody found).
+  putFrame(f, frame, box) {
+    this.ensurePose();
+    this.raw[f] = frame; if (!this.tr[f]) this.trCount++; this.tr[f] = 1; this.boxes[f] = box ? { ...box } : null;
+    this.poseInfo = { model: this.app.state.model, zoomCrop: this.app.state.zoomCrop, fps: this.fps };
     this.rebuildSmooth();
+  }
+  // Tracked stretches as [[first, last], ...] (0-based frame numbers).
+  ranges() {
+    const out = []; if (!this.tr) return out;
+    for (let i = 0; i < this.tr.length; i++) {
+      if (!this.tr[i]) continue;
+      let j = i; while (j + 1 < this.tr.length && this.tr[j + 1]) j++;
+      out.push([i, j]); i = j;
+    }
+    return out;
+  }
+  async getSession() {
+    const m = this.app.state.model;
+    if (this.session && this.session.key === m) return this.session;
+    this.closeSession();
+    this.session = await TrackSession.create(m);
+    return this.session;
+  }
+  closeSession() { try { this.session?.close(); } catch (_) { /* ignore */ } this.session = null; }
+  // Show frame f, then run the tracker on it. dir (+1/-1) says which way the tracking is travelling, so
+  // the Follow box and the person to pick carry over from the frame it came from.
+  async trackAt(f, dir) {
+    if (this.media.type === 'video') await this.seekTo(f);
+    this.f = f;
+    const sess = await this.getSession(), st = this.app.state, nb = f - dir;
+    let box = this.roi, prev = null;
+    if (this.tr?.[nb]) {
+      const bb = this.raw[nb] ? bboxOf(this.raw[nb]) : null;
+      prev = bb;
+      if (this.boxes[nb]) box = followBox(this.boxes[nb], bb);
+    }
+    const r = sess.detect(this, box, prev, st.zoomCrop);
+    this.putFrame(f, r.frame, box);
+    return r;
   }
   rebuildSmooth() { this.smoothed = this.raw ? smoothFrames(this.raw, this.app.state.smooth) : null; }
   poseFrame(f = Math.round(this.f)) { return this.smoothed ? this.smoothed[f] || null : null; }
@@ -445,10 +499,16 @@ export class Pane {
     this.drawBody(ctx, W, H, f, st);
     for (const a of this.ann) if (a.frame === null || a.frame === f) drawAnn(ctx, a, W, H, f, z);
     if (this.draft) this.drawDraft(ctx, W, H, f, st);
-    if (this.roi && st.layers.roi) this.drawBox(ctx, this.roi, W, H, u, 'Player', AMBER);
+    if (st.layers.roi) {
+      // Once tracking exists the box belongs to the tracked frames only (it is the box used on that frame).
+      let box = null;
+      if (this.hasTracking()) { if (this.tr[f]) box = this.boxes[f]; else if (st.tool === 'roi') box = this.roi; } else box = this.roi;
+      if (box) this.drawBox(ctx, box, W, H, u, 'Player', AMBER);
+    }
     if (this.lens && st.layers.lens) this.drawLens(ctx, W, H, u);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.tc.textContent = this.media.type === 'image' ? 'Photo' : `F ${f + 1} / ${this.N} · ${(f / this.fps).toFixed(3)} s`;
+    const trk = this.hasTracking() ? (this.tr[f] ? ' · tracked' : ' · not tracked') : '';
+    this.tc.textContent = this.media.type === 'image' ? 'Photo' + trk : `F ${f + 1} / ${this.N} · ${(f / this.fps).toFixed(3)} s${trk}`;
   }
 
   drawDraft(ctx, W, H, f, st) {
@@ -507,8 +567,9 @@ export class Pane {
     if (L.trail) {
       const wi = throwingWristIndex(hand);
       ctx.save(); ctx.strokeStyle = AMBER; ctx.lineWidth = 3 * u; ctx.lineJoin = 'round'; ctx.beginPath();
-      let started = false;
-      for (let i = 0; i <= f; i++) {
+      let started = false, a0 = f;
+      while (a0 > 0 && this.tr?.[a0 - 1]) a0--; // the path of the tracked stretch this frame is in
+      for (let i = a0; i <= f; i++) {
         const o = this.smoothed[i];
         if (!o || o[wi * 3 + 2] < 0.3) continue;
         const x = o[wi * 3] * W, y = o[wi * 3 + 1] * H;
@@ -569,11 +630,14 @@ export class Pane {
     return {
       name: this.nameEl.textContent, fps: this.fps, N: this.N, size: this.media ? [this.media.w, this.media.h] : null,
       ann: this.ann, rel: this.rel, roi: this.roi, lens: this.lens,
-      pose: this.raw ? { info: this.poseInfo, frames: packFrames(this.raw) } : null
+      pose: this.raw && this.trCount ? {
+        info: this.poseInfo, frames: packFrames(this.raw), ranges: this.ranges(),
+        boxes: this.boxes.map((b) => (b ? [b.x, b.y, b.w, b.h].map((v) => Math.round(v * 10000) / 10000) : null))
+      } : null
     };
   }
   fromJSON(d) {
     this.ann = d.ann || []; this.hist = []; this.rel = d.rel ?? null; this.roi = d.roi || null; this.lens = d.lens || null;
-    if (d.pose?.frames) this.setPose(unpackFrames(d.pose.frames), d.pose.info);
+    if (d.pose?.frames) this.setPose(unpackFrames(d.pose.frames), d.pose.info, { ranges: d.pose.ranges, boxes: d.pose.boxes });
   }
 }

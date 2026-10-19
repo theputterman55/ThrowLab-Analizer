@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.3.1';
+window.__TL_VERSION = '1.4.0';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -74,11 +74,22 @@ window.__TL_VERSION = '1.3.1';
         </div>
         <label class="chk"><input type="checkbox" id="zoomCrop" checked> Zoom into the Follow player box</label>
         <div class="inline">
-          <button class="btn primary" id="analyze">Analyze body</button>
+          <button class="btn" id="analyze" title="Track every frame of the clip that is not tracked yet">Analyze whole clip</button>
           <button class="btn" id="cancelAn" hidden>Cancel</button>
           <button class="btn sm" id="clearPose" title="Remove the tracking for this clip">Clear tracking</button>
         </div>
         <progress id="anBar" max="1" value="0" hidden></progress>
+        <div class="trk" id="trk">
+          <span class="lbl">Track a shot</span>
+          <div class="trk-ctl">
+            <button class="ib" id="trPrev" aria-label="Back one frame and track it" title="Back one frame. If it sits next to tracked frames it is tracked too."><svg viewBox="0 0 24 24"><path d="M17 5v14L7 12z"/></svg></button>
+            <button class="ib play" id="trPlay" aria-label="Track while playing" title="Play from this frame and track as it goes. Press again to stop."><svg viewBox="0 0 24 24" id="trIcon"><path d="M7 4v16l13-8z"/></svg></button>
+            <button class="ib" id="trNext" aria-label="Forward one frame and track it" title="Forward one frame. If it sits next to tracked frames it is tracked too."><svg viewBox="0 0 24 24"><path d="M7 5v14l10-7z"/></svg></button>
+            <button class="btn sm" id="trDir" title="Which way Play tracks">Play: forward →</button>
+          </div>
+          <div class="trk-read"><b id="trFrame">Frame – / –</b><span id="trHere" class="trk-badge"></span></div>
+          <p class="note" id="trRange">Stop on the first frame of the throw, press play, and pause after the release.</p>
+        </div>
         <p class="note" id="anStatus">Runs on this device. Nothing is uploaded.</p>
       </div>
     </section>
@@ -96,7 +107,7 @@ window.__TL_VERSION = '1.3.1';
     <section>
       <h3>Measurements · <span id="measPane">A</span></h3>
       <div id="meas"></div>
-      <p class="note" id="measNote">Run Analyze body to fill these in.</p>
+      <p class="note" id="measNote">Track a shot to fill these in.</p>
     </section>
 
     <section>
@@ -139,7 +150,7 @@ window.__TL_VERSION = '1.3.1';
     </div>
     <div class="scrub">
       <input type="range" id="scrub" min="0" max="0" step="1" value="0" aria-label="Frame">
-      <div class="ticks" id="ticks"></div>
+      <div class="ticks" id="ticks"><div class="trbands" id="trbands"></div></div>
     </div>
   </footer>
 </div>
