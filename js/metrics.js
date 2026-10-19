@@ -14,8 +14,8 @@ export function angle3(a, b, c) {
 
 // Landmark indices (MediaPipe Pose, 33 points)
 const ROLE = {
-  R: { sh: 12, el: 14, wr: 16, hip: 24, kn: 26, an: 28, oSh: 11, oHip: 23, oKn: 25, oAn: 27 },
-  L: { sh: 11, el: 13, wr: 15, hip: 23, kn: 25, an: 27, oSh: 12, oHip: 24, oKn: 26, oAn: 28 }
+  R: { sh: 12, el: 14, wr: 16, hand: 20, hip: 24, kn: 26, an: 28, oSh: 11, oHip: 23, oKn: 25, oAn: 27 },
+  L: { sh: 11, el: 13, wr: 15, hand: 19, hip: 23, kn: 25, an: 27, oSh: 12, oHip: 24, oKn: 26, oAn: 28 }
 };
 const FIXED = { nose: 0, lSh: 11, rSh: 12, lHip: 23, rHip: 24, lAn: 27, rAn: 28 };
 
@@ -42,6 +42,15 @@ export const METRIC_DEFS = {
     label: 'Arm swing', needs: ['sh', 'el'],
     fn: (g, c) => { const s = g('sh'), e = g('el'); return deg(Math.atan2((e[0] - s[0]) * c.dir, e[1] - s[1])); },
     fmt: signedDeg
+  },
+  forearm: {
+    label: 'Forearm swing', needs: ['el', 'wr'],
+    fn: (g, c) => { const e = g('el'), w = g('wr'); return deg(Math.atan2((w[0] - e[0]) * c.dir, w[1] - e[1])); },
+    fmt: signedDeg, note: 'Elbow to wrist, from straight down. + means toward the target'
+  },
+  wristBend: {
+    label: 'Wrist angle', needs: ['el', 'wr', 'hand'],
+    fn: (g) => angle3(g('el'), g('wr'), g('hand')), fmt: (v) => v.toFixed(0) + '°', note: '180° is a straight line from forearm to hand'
   },
   lean: {
     label: 'Torso lean', needs: ['lSh', 'rSh', 'lHip', 'rHip'],

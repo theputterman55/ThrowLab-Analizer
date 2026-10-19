@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.5.2';
+window.__TL_VERSION = '1.6.0';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -95,8 +95,14 @@ window.__TL_VERSION = '1.5.2';
     </section>
 
     <section id="ptSec">
-      <h3>Point labeler · <span id="ptPane">A</span></h3>
-      <p class="note">Mark joints by hand. Pick a set, click its points on the video, then press <b>D</b> for the next frame (<b>A</b> goes back). Points carry forward, so only move a dot when the joint moves.</p>
+      <h3>Point labeler · <span id="ptPane">A</span> · <span id="ptSlotLbl">Player 1 · Throw 1</span></h3>
+      <div class="slotrow"><span class="lbl">Player</span>
+        <div class="seg" id="ptPlayer" role="group" aria-label="Player"><button data-p="1" aria-pressed="true">1</button><button data-p="2" aria-pressed="false">2</button></div></div>
+      <div class="slotrow"><span class="lbl">Throw</span>
+        <div class="seg" id="ptThrow" role="group" aria-label="Throw number"></div>
+        <button class="btn sm" id="ptThrowAdd" title="Add another throw">+</button></div>
+      <input type="text" id="ptNote" maxlength="140" placeholder="Describe this throw (optional)" aria-label="Description of this throw">
+      <p class="note">Mark joints by hand. Pick a set, click its points on the video, then step with <b>D</b> (next) and <b>A</b> (back), or the bar below. Points carry forward, so only move a dot when the joint moves. Each player and throw keeps its own points.</p>
       <div class="ptsets" id="ptSets"></div>
       <div id="ptPanel" hidden>
         <p class="note" id="ptHint"></p>
@@ -105,8 +111,23 @@ window.__TL_VERSION = '1.5.2';
           <button class="btn sm trkonly" id="ptSeed" title="Start this frame from the tracker's skeleton, then drag to fix">Use tracker's points</button>
           <button class="btn sm" id="ptClear" title="Delete this set of points">Clear set</button>
         </div>
+        <p class="note" id="ptRead" hidden></p>
         <p class="note" id="ptInfo"></p>
       </div>
+      <div class="pttrans" id="ptTrans" role="group" aria-label="Step through the clip">
+        <button class="ib" id="ptStart" title="Start of the motion (first keyframe)" aria-label="Start of the motion"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button class="ib" id="ptPrevKey" title="Previous keyframe" aria-label="Previous keyframe"><svg viewBox="0 0 24 24"><path d="M12 5v14L3 12zM21 5v14l-9-7z"/></svg></button>
+        <button class="ib" id="ptBack" title="Back one frame (A)" aria-label="Back one frame"><svg viewBox="0 0 24 24"><path d="M17 5v14L7 12z"/></svg></button>
+        <button class="ib play" id="ptPlay" title="Play / pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24" id="ptPlayIcon"><path d="M7 4v16l13-8z"/></svg></button>
+        <button class="ib" id="ptFwd" title="Forward one frame (D)" aria-label="Forward one frame"><svg viewBox="0 0 24 24"><path d="M7 5v14l10-7z"/></svg></button>
+        <button class="ib" id="ptNextKey" title="Next keyframe" aria-label="Next keyframe"><svg viewBox="0 0 24 24"><path d="M12 5v14l9-7zM3 5v14l9-7z"/></svg></button>
+        <button class="ib" id="ptEnd" title="End of the motion (Finish frame)" aria-label="End of the motion"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      </div>
+      <p class="ptfr" id="ptFrame">No clip</p>
+      <div class="inline">
+        <button class="btn sm" id="ptUndo" title="Undo the last point change (Ctrl+Z)">Undo</button>
+      </div>
+      <p class="note" id="ptSummary"></p>
     </section>
 
     <section>
@@ -121,6 +142,7 @@ window.__TL_VERSION = '1.5.2';
 
     <section>
       <h3>Measurements · <span id="measPane">A</span></h3>
+      <p class="note" id="measDesc" hidden></p>
       <div id="meas"></div>
       <p class="note" id="measNote">Track a shot to fill these in.</p>
     </section>
@@ -165,7 +187,7 @@ window.__TL_VERSION = '1.5.2';
     </div>
     <div class="scrub">
       <input type="range" id="scrub" min="0" max="0" step="1" value="0" aria-label="Frame">
-      <div class="ticks" id="ticks"><div class="trbands trkonly" id="trbands"></div></div>
+      <div class="ticks" id="ticks"><div class="trbands" id="trbands"></div></div>
     </div>
   </footer>
 </div>

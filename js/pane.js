@@ -46,7 +46,7 @@ export class Pane {
     this.rel = null; this.roi = null; this.lens = null;
     this.raw = null; this.smoothed = null; this.poseInfo = null;
     this.tr = null; this.boxes = null; this.trCount = 0; this.session = null; // tr[f] = 1 where the body tracker has run
-    this.pts = {}; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer = 0; this.sv = 0; this.pcache = null; // hand-placed points
+    this.slots = {}; this.slot = { player: 1, throw: 1 }; this.nThrows = 4; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer = 0; this.sv = 0; this.pcache = null; // hand-placed points
     this.analyzing = false; this.seeking = false;
     // View (zoom/pan) in canvas pixels: screen = point * z + (tx, ty). hold locks it.
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null;
@@ -175,7 +175,7 @@ export class Pane {
     this.vsz = { W: Math.round(this.media.w * s), H: Math.round(this.media.h * s) };
     this.f = 0; this.ann = []; this.hist = []; this.rel = null; this.roi = null; this.lens = null;
     this.clearPose(); this.draft = null; this.pathAnn = null;
-    this.pts = {}; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer++;
+    this.resetSlots();
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null; this.layout(); this.syncZoom();
     this.emptyEl.hidden = true;
     this.updateMeta();
@@ -293,7 +293,7 @@ export class Pane {
     const hand = this.app.state.hand, key = `${f}|${this.ptVer}|${this.sv}|${hand}`;
     if (this.pcache && this.pcache.key === key) return this.pcache.v;
     let out = base;
-    for (const k of Object.keys(this.pts)) {
+    for (const k of Object.keys(this.pts).sort((a, b) => (b === 'arm') - (a === 'arm'))) { // the Arm set goes first so Shoulders wins on the shared shoulder
       const cur = this.setPoints(k, f); if (!cur || !POINT_SETS[k]) continue;
       if (out === base) out = base ? Float32Array.from(base) : new Float32Array(99);
       POINT_SETS[k].roles.forEach((r, j) => { const i = roleIndex(r, hand) * 3; out[i] = cur.pts[j][0]; out[i + 1] = cur.pts[j][1]; out[i + 2] = 1; });
@@ -301,6 +301,33 @@ export class Pane {
     this.pcache = { key, v: out };
     return out;
   }
+
+  // ---------- player / throw slots ----------
+  // Each player + throw number keeps its own set of hand-placed points (and a note). this.pts is the active slot's points.
+  slotKey(player = this.slot.player, thr = this.slot.throw) { return `${player}-${thr}`; }
+  slotData(key = this.slotKey()) { return this.slots[key] || (this.slots[key] = { pts: {}, note: '' }); }
+  get pts() { return this.slotData().pts; }
+  set pts(v) { this.slotData().pts = v; }
+  get note() { return this.slotData().note; }
+  setNote(t) { this.slotData().note = t; this.app.onPaneChange(this, true); }
+  slotHas(player, thr) { const d = this.slots[this.slotKey(player, thr)]; return !!d && (Object.keys(d.pts).length > 0 || !!d.note); }
+  switchSlot(player, thr) {
+    this.slot = { player, throw: thr }; this.nThrows = Math.max(this.nThrows, thr);
+    this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptChanged();
+  }
+  resetSlots() { this.slots = {}; this.slot = { player: 1, throw: 1 }; this.nThrows = 4; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer++; }
+  // When the labeled motion starts and ends on this slot (all sets together). open = a set is not finished yet.
+  motion() {
+    let a = null, b = null, open = false;
+    for (const k of POINT_SET_ORDER) {
+      const ks = this.keyFrames(k); if (!ks.length) continue;
+      const s = this.pts[k], last = s.end !== null ? s.end : ks[ks.length - 1];
+      if (s.end === null) open = true;
+      a = a === null ? ks[0] : Math.min(a, ks[0]); b = b === null ? last : Math.max(b, last);
+    }
+    return a === null ? null : { start: a, end: b, open };
+  }
+  allKeys() { const set = new Set(); for (const k of POINT_SET_ORDER) this.keyFrames(k).forEach((x) => set.add(x)); return [...set].sort((x, y) => x - y); }
 
   // ---------- point labeler ----------
   ptSnap() { this.ptHist.push(JSON.stringify(this.pts)); if (this.ptHist.length > 100) this.ptHist.shift(); }
@@ -318,6 +345,19 @@ export class Pane {
     const b = s.kf[ks[i + 1]], t = (f - ks[i]) / (ks[i + 1] - ks[i]);
     return { pts: a.map((p, j) => [p[0] + (b[j][0] - p[0]) * t, p[1] + (b[j][1] - p[1]) * t]), key: false };
   }
+  // Like setPoints, but the Arm set takes its shoulder from the Shoulders set when that has points on this frame.
+  livePts(key, f) {
+    const cur = this.setPoints(key, f); if (!cur) return null;
+    if (key !== 'arm') return cur;
+    const sh = this.setPoints('shoulders', f); if (!sh) return cur;
+    const pts = cur.pts.map((q) => [q[0], q[1]]); pts[0] = [sh.pts[0][0], sh.pts[0][1]];
+    return { pts, key: cur.key, linked: true };
+  }
+  // Which point of a set the next click places on frame f.
+  ptNextIndex(key, f) {
+    if (this.ptDraft && this.ptDraft.key === key && this.ptDraft.f === f) return this.ptDraft.pts.length;
+    return key === 'arm' && this.setPoints('shoulders', f) ? 1 : 0;
+  }
   ensureKey(key, f) {
     const s = this.pts[key]; if (!s) return null;
     if (s.kf[f]) return s.kf[f];
@@ -328,12 +368,12 @@ export class Pane {
   // Click or drag on the video while a point set is active.
   pointDown(e) {
     const key = this.app.state.pset, def = POINT_SETS[key]; if (!def) return;
-    const f = Math.round(this.f), q = this.pt(e), cur = this.setPoints(key, f);
+    const f = Math.round(this.f), q = this.pt(e), cur = this.livePts(key, f);
     if (cur) {
       // Grab the nearest dot; a click far from any dot moves the nearest one there.
       const [cx, cy] = this.canvasXY(e), sc = this.k * this.vw.z, v = this.vw;
       let best = 0, bd = 1e9;
-      cur.pts.forEach((p, j) => { const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
+      cur.pts.forEach((p, j) => { if (cur.linked && j === 0) return; const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
       this.ptSnap();
       const kf = this.ensureKey(key, f);
       if (!kf) { this.ptHist.pop(); return; }
@@ -345,7 +385,11 @@ export class Pane {
     }
     const s = this.pts[key];
     if (s && s.end !== null) { this.app.toast(`${def.label} is finished. Press Edit to change it.`); return; }
-    if (!this.ptDraft || this.ptDraft.key !== key || this.ptDraft.f !== f) this.ptDraft = { key, f, pts: [] };
+    if (!this.ptDraft || this.ptDraft.key !== key || this.ptDraft.f !== f) {
+      this.ptDraft = { key, f, pts: [] };
+      const sh = key === 'arm' ? this.setPoints('shoulders', f) : null; // the arm starts at the shoulder you already placed
+      if (sh) this.ptDraft.pts.push([sh.pts[0][0], sh.pts[0][1]]);
+    }
     this.ptDraft.pts.push([q[0], q[1]]);
     if (this.ptDraft.pts.length === def.roles.length) {
       this.ptSnap();
@@ -380,21 +424,31 @@ export class Pane {
 
   drawManual(ctx, W, H, f, u, st) {
     for (const k of POINT_SET_ORDER) {
-      const def = POINT_SETS[k], cur = this.setPoints(k, f);
+      const def = POINT_SETS[k], cur = this.livePts(k, f);
       const P = cur ? cur.pts : (this.ptDraft && this.ptDraft.key === k && this.ptDraft.f === f ? this.ptDraft.pts : null);
       if (!P) continue;
       const px = P.map((p) => [p[0] * W, p[1] * H]), live = st.pset === k;
       ctx.save();
-      ctx.strokeStyle = def.color; ctx.lineCap = 'round';
-      if (px.length > 1) { ctx.lineWidth = (live ? 5 : 4) * u; ctx.beginPath(); ctx.moveTo(px[0][0], px[0][1]); ctx.lineTo(px[1][0], px[1][1]); ctx.stroke(); }
-      px.forEach(([x, y]) => {
+      ctx.lineCap = 'round';
+      const nseg = def.chain ? px.length - 1 : Math.min(1, px.length - 1);
+      for (let i = 0; i < nseg; i++) {
+        ctx.strokeStyle = def.segColors ? def.segColors[i] : def.color; ctx.lineWidth = (live ? 5 : 4) * u;
+        ctx.beginPath(); ctx.moveTo(px[i][0], px[i][1]); ctx.lineTo(px[i + 1][0], px[i + 1][1]); ctx.stroke();
+      }
+      px.forEach(([x, y], i) => {
+        const col = def.segColors ? def.segColors[Math.max(0, i - 1)] : def.color;
         ctx.beginPath(); ctx.arc(x, y, (cur && cur.key ? 8 : 6) * u * (live ? 1.15 : 1), 0, Math.PI * 2);
-        if (cur && cur.key) { ctx.fillStyle = def.color; ctx.fill(); ctx.lineWidth = 2.5 * u; ctx.strokeStyle = '#fff'; ctx.stroke(); }
-        else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 3 * u; ctx.strokeStyle = def.color; ctx.stroke(); }
+        if (cur && cur.key) { ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2.5 * u; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+        else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 3 * u; ctx.strokeStyle = col; ctx.stroke(); }
       });
-      if (cur && px.length === 2) {
+      if (cur && !def.chain && px.length === 2) {
         const v = computeMetric(def.metric, this.poseFrame(f), this.media, st.hand, st.dir);
         if (v !== null) tag(ctx, METRIC_DEFS[def.metric].fmt(v), (px[0][0] + px[1][0]) / 2, Math.min(px[0][1], px[1][1]) - 26 * u, u);
+      } else if (cur && def.chain && px.length === 4) {
+        const fr = this.poseFrame(f);
+        const ve = computeMetric('elbow', fr, this.media, st.hand, st.dir), vw = computeMetric('wristBend', fr, this.media, st.hand, st.dir);
+        if (ve !== null) tag(ctx, METRIC_DEFS.elbow.fmt(ve), px[1][0] + 44 * u, px[1][1] - 20 * u, u);
+        if (vw !== null) tag(ctx, METRIC_DEFS.wristBend.fmt(vw), px[2][0] + 44 * u, px[2][1] + 22 * u, u);
       }
       ctx.restore();
     }
@@ -752,7 +806,7 @@ export class Pane {
   toJSON() {
     return {
       name: this.nameEl.textContent, fps: this.fps, N: this.N, size: this.media ? [this.media.w, this.media.h] : null,
-      ann: this.ann, rel: this.rel, roi: this.roi, lens: this.lens, pts: this.pts,
+      ann: this.ann, rel: this.rel, roi: this.roi, lens: this.lens, slot: this.slot, nThrows: this.nThrows, slots: this.slots,
       pose: this.raw && this.trCount ? {
         info: this.poseInfo, frames: packFrames(this.raw), ranges: this.ranges(),
         boxes: this.boxes.map((b) => (b ? [b.x, b.y, b.w, b.h].map((v) => Math.round(v * 10000) / 10000) : null))
@@ -761,7 +815,9 @@ export class Pane {
   }
   fromJSON(d) {
     this.ann = d.ann || []; this.hist = []; this.rel = d.rel ?? null; this.roi = d.roi || null; this.lens = d.lens || null;
-    this.pts = d.pts || {}; this.ptHist = []; this.ptDraft = null; this.ptVer++;
+    this.resetSlots();
+    if (d.slots) { this.slots = d.slots; this.slot = d.slot || { player: 1, throw: 1 }; this.nThrows = Math.max(4, d.nThrows || 4, this.slot.throw); }
+    else if (d.pts) this.slotData('1-1').pts = d.pts; // older saves (before Player / Throw slots)
     if (d.pose?.frames) this.setPose(unpackFrames(d.pose.frames), d.pose.info, { ranges: d.pose.ranges, boxes: d.pose.boxes });
   }
 }

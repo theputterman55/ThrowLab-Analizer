@@ -105,7 +105,8 @@ function buildMeas() {
 }
 function updateMeas() {
   const p = act();
-  $('#measPane').textContent = p.id;
+  $('#measPane').textContent = `${p.id} · P${p.slot.player} · T${p.slot.throw}`;
+  $('#measDesc').hidden = !p.note; $('#measDesc').textContent = p.note;
   const has = !!p.poseFrame();
   $('#measNote').hidden = has;
   $('#measNote').textContent = !TRACKER_UI ? (p.media ? 'Place points with the Point labeler to fill these in.' : 'Open a clip, then place points.') : !p.media ? 'Open a clip, then track a shot.' : p.hasTracking() ? (p.tr[Math.round(p.f)] ? 'No body found on this frame.' : 'This frame is not tracked. Step next to the tracked frames, or press the tracker play.') : 'Track a shot (Body tracking panel) to fill these in.';
@@ -121,13 +122,13 @@ function updateCompare() {
   if (!state.split) return;
   const L = LAYOUTS[state.layout];
   const cell = (p, k) => {
-    if (!p.media || !p.raw) return '—';
+    if (!p.media) return '—';
     const f = p.rel !== null ? p.rel : Math.round(p.f);
     const v = p.metric(k, f);
     return v === null ? '—' : METRIC_DEFS[k].fmt(v);
   };
   const diff = (k) => {
-    const [a, b] = panes.map((p) => (p.media && p.raw ? p.metric(k, p.rel !== null ? p.rel : Math.round(p.f)) : null));
+    const [a, b] = panes.map((p) => (p.media ? p.metric(k, p.rel !== null ? p.rel : Math.round(p.f)) : null));
     if (a === null || b === null) return '—';
     const d = b - a;
     return (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d).toFixed(0) + (k === 'wristH' || k === 'stance' ? ' pts' : '°');
@@ -487,29 +488,62 @@ POINT_SET_ORDER.forEach((k) => {
   $('#ptSets').appendChild(b);
 });
 const fr1 = (n) => n + 1; // frames are shown starting from 1
+let thrCount = 0;
 function updatePtUI() {
   const p = act();
   $('#ptPane').textContent = p.id;
+  $('#ptSlotLbl').textContent = `Player ${p.slot.player} · Throw ${p.slot.throw}`;
+  $$('#ptPlayer button').forEach((b) => { b.setAttribute('aria-pressed', String(+b.dataset.p === p.slot.player)); b.classList.toggle('has', [...Array(p.nThrows)].some((_, i) => p.slotHas(+b.dataset.p, i + 1))); });
+  const tb = $('#ptThrow');
+  if (thrCount !== p.nThrows) { thrCount = p.nThrows; tb.innerHTML = ''; for (let i = 1; i <= thrCount; i++) { const b = document.createElement('button'); b.dataset.t = i; b.textContent = i; tb.appendChild(b); } }
+  $$('#ptThrow button').forEach((b) => { b.setAttribute('aria-pressed', String(+b.dataset.t === p.slot.throw)); b.classList.toggle('has', p.slotHas(p.slot.player, +b.dataset.t)); });
+  const nt = $('#ptNote'); if (document.activeElement !== nt && nt.value !== p.note) nt.value = p.note;
   POINT_SET_ORDER.forEach((k) => {
     const b = $(`.ptset[data-set=${k}]`), s = p.pts[k], ks = p.keyFrames(k);
     b.setAttribute('aria-pressed', String(state.pset === k));
     b.querySelector('em').textContent = !s ? '' : s.end !== null ? `✓ ${fr1(ks[0])}–${fr1(s.end)}` : `${ks.length} key${ks.length === 1 ? '' : 's'}`;
   });
+  // step bar + undo + motion summary
+  const f = Math.round(p.f), on = !!p.media && p.N > 1, mo = p.motion();
+  $$('#ptTrans button').forEach((b) => (b.disabled = !on));
+  $('#ptPlayIcon').innerHTML = state.playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
+  $('#ptPlay').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
+  $('#ptFrame').textContent = !p.media ? 'No clip' : `Frame ${f + 1} / ${p.N} · ${(f / p.fps).toFixed(3)} s${mo && f >= mo.start && f <= mo.end ? ' · in the motion' : ''}`;
+  $('#ptUndo').disabled = !p.ptHist.length;
+  $('#ptSummary').textContent = !mo ? 'Nothing labeled on this throw yet.'
+    : `Motion: frame ${fr1(mo.start)} → ${fr1(mo.end)}${mo.open ? ' (not finished: press Finish on the last frame)' : ''}\n${mo.end - mo.start + 1} frames · ${((mo.end - mo.start + 1) / p.fps).toFixed(2)} s · ${p.allKeys().length} keyframe${p.allKeys().length === 1 ? '' : 's'}`;
   const key = state.pset, panel = $('#ptPanel');
   panel.hidden = !key;
   if (!key) return;
-  const def = POINT_SETS[key], s = p.pts[key], ks = p.keyFrames(key), f = Math.round(p.f), cur = p.setPoints(key, f);
+  const def = POINT_SETS[key], s = p.pts[key], ks = p.keyFrames(key), cur = p.setPoints(key, f);
   panel.style.setProperty('--c', def.color);
   let hint;
   if (!p.media) hint = 'Open a clip first.';
   else if (cur) hint = cur.key ? 'Keyframe. Drag a dot to move it, or click near the joint to put the nearest dot there. Press D for the next frame.' : 'Following your earlier points. Drag a dot only where the joint has moved, then press D.';
   else if (s && s.end !== null) hint = `${def.label} is finished. Press Edit to change it.`;
-  else if (p.ptDraft && p.ptDraft.key === key && p.ptDraft.f === f) hint = `Click the ${def.names[p.ptDraft.pts.length]} on the video.`;
-  else hint = `Click the ${def.names[0]} on the video, then the ${def.names[1]}.`;
+  else { const i = p.ptNextIndex(key, f); hint = `Click the ${def.names.slice(i).join(', then the ')} on the video.${key === 'arm' && i === 1 ? ' The shoulder comes from your Shoulders points.' : ''}`; }
   $('#ptHint').textContent = hint;
   $('#ptDone').textContent = s && s.end !== null ? 'Edit' : '✓ Finish';
   $('#ptInfo').textContent = !s ? 'Nothing placed yet.' : `Keyframes: ${ks.map(fr1).join(', ')}. ${s.end !== null ? `Finished, frames ${fr1(ks[0])}–${fr1(s.end)}.` : 'Not finished: the points carry forward until you press Finish on the last frame of the motion.'}`;
+  let read = '';
+  if (key === 'arm' && cur) read = [['arm', 'Upper arm'], ['forearm', 'Forearm'], ['elbow', 'Elbow'], ['wristBend', 'Wrist']].map(([m, l]) => { const v = p.metric(m); return v === null ? null : `${l} ${METRIC_DEFS[m].fmt(v)}`; }).filter(Boolean).join(' · ');
+  $('#ptRead').hidden = !read; $('#ptRead').textContent = read;
 }
+// Player / throw slots
+$$('#ptPlayer button').forEach((b) => (b.onclick = () => act().switchSlot(+b.dataset.p, act().slot.throw)));
+$('#ptThrow').onclick = (e) => { const b = e.target.closest('button'); if (b) act().switchSlot(act().slot.player, +b.dataset.t); };
+$('#ptThrowAdd').onclick = () => { const p = act(); if (p.nThrows >= 12) { toast('12 throws is the most for one clip.'); return; } p.switchSlot(p.slot.player, p.nThrows + 1); };
+$('#ptNote').oninput = (e) => act().setNote(e.target.value);
+// Step bar for the labeler
+function goFrame(n) { stopTrack(); state.playing = false; const p = act(); if (p.media) p.f = clamp(n, 0, p.N - 1); syncUI(); dirty = true; }
+$('#ptStart').onclick = () => { const m = act().motion(); goFrame(m ? m.start : 0); };
+$('#ptEnd').onclick = () => { const p = act(), m = p.motion(); goFrame(m ? m.end : p.N - 1); };
+$('#ptBack').onclick = () => step(-1);
+$('#ptFwd').onclick = () => step(1);
+$('#ptPlay').onclick = togglePlay;
+$('#ptPrevKey').onclick = () => { const p = act(), f = Math.round(p.f), ks = p.allKeys().filter((k) => k < f); goFrame(ks.length ? ks[ks.length - 1] : 0); };
+$('#ptNextKey').onclick = () => { const p = act(), f = Math.round(p.f), ks = p.allKeys().filter((k) => k > f); goFrame(ks.length ? ks[0] : p.N - 1); };
+$('#ptUndo').onclick = () => { if (!act().undoPts()) toast('Nothing to undo.'); };
 $('#ptDone').onclick = () => {
   const key = state.pset; if (!key) return;
   const r = act().toggleDone(key);

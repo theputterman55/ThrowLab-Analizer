@@ -8,6 +8,16 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.6.0
+- Arm set in the Point labeler: click the throwing shoulder, elbow, wrist and hand. Three color-coded segments (upper arm, forearm, hand) with the elbow and wrist angles on the video. If you already placed Shoulders on that frame, the arm starts from that shoulder and you only click the elbow, wrist and hand. Move the Shoulders and the arm follows.
+- New measurements: Forearm swing and Wrist angle (next to Elbow angle). Elbow angle now works from your arm points.
+- Step bar for the labeler (above Undo): start of the motion, previous keyframe, back one frame, play/pause, forward one frame, next keyframe, end of the motion, with a frame readout.
+- Undo button for point changes, under the step bar (Ctrl+Z still works).
+- Motion summary: where the labeled motion starts and ends, how many frames, how long it lasts, and whether every set is finished.
+- Player 1 / 2 and Throw 1-4 (plus a + button) for each clip. Each player and throw keeps its own points and its own description. The Point labeler and Measurements headings show the player and throw. Older saves open as Player 1, Throw 1.
+- Fix: the keyframe ticks on the timeline were hidden in 1.5.1. They are back.
+- The comparison table works from placed points, not only from the tracker.
+
 ## 1.5.2
 - D (next frame) and A (previous frame) always step frames now, with or without a point set active. Shift+D / Shift+A step 5 frames. The point labeler follows each step.
 - The Arrow tool shortcut moves from A to R.

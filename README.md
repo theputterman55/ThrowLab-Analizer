@@ -109,3 +109,11 @@ For footage the tracker cannot read, place joints yourself.
 4. Measurements use your points where they exist. **Use tracker's points** starts a frame from the skeleton so you only drag to fix.
 
 The Follow box only follows a body that is inside it and moves slowly, so a neighbour at the edge cannot pull it off the thrower.
+
+## Point labeler: Arm set, step bar, players and throws (1.6.0)
+
+- **Arm:** shoulder, elbow, wrist, hand. If Shoulders are already placed on that frame the arm starts there, so you only click three points.
+- **Step bar:** start of the motion, previous keyframe, back, play, forward, next keyframe, end of the motion. D and A still step one frame.
+- **Undo** sits under the step bar.
+- **Player 1 / 2 and Throw 1-4 (+):** each combination keeps its own points and a short description.
+

@@ -35,7 +35,7 @@ export const LAYOUTS = {
     split: false, pin: 'all', dirChoice: false,
     extraTools: ['plumb', 'level', 'board', 'lens', 'roi'],
     metrics: [
-      { k: 'shoulderTilt' }, { k: 'hipTilt' }, { k: 'lean', label: 'Lateral lean' }, { k: 'stance' }, { k: 'elbow' }
+      { k: 'shoulderTilt' }, { k: 'hipTilt' }, { k: 'lean', label: 'Lateral lean' }, { k: 'stance' }, { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }
     ]
   },
   side: {
@@ -50,7 +50,7 @@ export const LAYOUTS = {
     split: true, pin: 'all', dirChoice: true,
     extraTools: ['plumb', 'level', 'path'],
     metrics: [
-      { k: 'elbow' }, { k: 'arm' }, { k: 'lean' }, { k: 'knee' }, { k: 'wristH' }
+      { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }, { k: 'arm' }, { k: 'lean' }, { k: 'knee' }, { k: 'wristH' }
     ]
   },
   shoulder: {
@@ -65,7 +65,7 @@ export const LAYOUTS = {
     split: false, pin: 'all', dirChoice: false,
     extraTools: ['plumb', 'level', 'path', 'lens', 'roi'],
     metrics: [
-      { k: 'elbow' }, { k: 'shoulderTilt' }, { k: 'hipTilt' }, { k: 'lean', label: 'Lateral lean' }, { k: 'armLine' }
+      { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }, { k: 'shoulderTilt' }, { k: 'hipTilt' }, { k: 'lean', label: 'Lateral lean' }, { k: 'armLine' }
     ]
   },
   broadcast: {
@@ -80,7 +80,7 @@ export const LAYOUTS = {
     split: false, pin: 'frame', dirChoice: true,
     extraTools: ['lens', 'roi'],
     metrics: [
-      { k: 'elbow' }, { k: 'arm' }, { k: 'lean' }, { k: 'shoulderTilt' }, { k: 'knee' }
+      { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }, { k: 'arm' }, { k: 'lean' }, { k: 'shoulderTilt' }, { k: 'knee' }
     ]
   }
 };
@@ -101,6 +101,11 @@ export const POINT_SETS = {
   shoulders: { label: 'Shoulders', color: '#ff8a3d', metric: 'shoulderTilt', roles: ['sh', 'oSh'], names: ['throwing shoulder', 'other shoulder'] },
   hips: { label: 'Hips', color: '#4da3ff', metric: 'hipTilt', roles: ['hip', 'oHip'], names: ['throwing hip', 'other hip'] }
 };
-export const POINT_SET_ORDER = ['shoulders', 'hips'];
+POINT_SETS.arm = {
+  label: 'Arm', color: '#ff6b81', metric: 'elbow', chain: true, roles: ['sh', 'el', 'wr', 'hand'],
+  names: ['throwing shoulder', 'elbow', 'wrist', 'hand'], segColors: ['#ff6b81', '#f06bd6', '#b58bff'],
+  note: 'The shoulder is shared with your Shoulders points when they exist on the same frame.'
+};
+export const POINT_SET_ORDER = ['shoulders', 'hips', 'arm'];
 // Color code shown beside each measurement (the point sets above use the same colors).
-export const METRIC_COLORS = { shoulderTilt: '#ff8a3d', hipTilt: '#4da3ff', lean: '#e6e65a', stance: '#c79bff', elbow: '#ff6b81' };
+export const METRIC_COLORS = { shoulderTilt: '#ff8a3d', hipTilt: '#4da3ff', lean: '#e6e65a', stance: '#c79bff', elbow: '#ff6b81', arm: '#ff9db0', forearm: '#f06bd6', wristBend: '#b58bff' };
