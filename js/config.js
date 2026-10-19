@@ -3,6 +3,8 @@
 // App version, MAJOR.MINOR.PATCH (see CHANGELOG.md). Set it in index.html (window.__TL_VERSION) with every push.
 export const VERSION = globalThis.__TL_VERSION || 'dev'; // set in index.html
 
+export const PLAYER_COLORS = { 1: '#ff4d4d', 2: '#2f6bff' }; // Player 1 red, Player 2 blue (buttons and boxes)
+
 export const CORE_TOOLS = ['cursor', 'line', 'arrow', 'circle', 'rect', 'angle', 'pen', 'eraser'];
 
 export const TOOL_DEFS = {
@@ -18,8 +20,9 @@ export const TOOL_DEFS = {
   level:  { label: 'Level line', key: 'H', hint: 'Click to drop a horizontal line.', svg: '<path d="M3 12h18"/><path d="M16 8l5 4-5 4"/>' },
   path:   { label: 'Path tracer', key: 'T', hint: 'Click the bag or hand on each frame. The dots join into a path. Press Enter to finish.', svg: '<circle cx="5" cy="18" r="1.6"/><circle cx="10" cy="9" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="20" cy="12" r="1.6"/><path d="M5 18L10 9L16 6L20 12" stroke-dasharray="2 2"/>' },
   board:  { label: 'Board outline', key: 'B', hint: 'Click the 4 board corners: near left, near right, far right, far left.', svg: '<path d="M7 5h10l3 14H4z"/><path d="M12 5v14" stroke-dasharray="2 2"/>' },
+  pbox:   { label: 'Player box', key: 'F', hint: 'Drag a box around the selected player (red = Player 1, blue = Player 2). It turns on from this frame. Use Show box beside Player to switch it on or off by frame.', svg: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="9" r="2"/><path d="M12 11v5M9 13h6"/>' },
   lens:   { label: 'Zoom window', key: 'Z', hint: 'Drag a box over the thrower to magnify them in a corner window. To zoom the whole picture, pinch or scroll over it.', svg: '<circle cx="10" cy="10" r="6"/><path d="M15 15l5 5M10 7v6M7 10h6"/>' },
-  roi:    { label: 'Follow player', key: 'F', hint: 'Drag a box around the thrower so the body tracker follows only them.', svg: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="9" r="2"/><path d="M12 11v5M9 13h6"/>' }
+  roi:    { label: 'Follow player', key: 'Q', hint: 'Drag a box around the thrower so the body tracker follows only them.', svg: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="9" r="2"/><path d="M12 11v5M9 13h6"/>' }
 };
 
 export const LAYOUTS = {
@@ -33,7 +36,7 @@ export const LAYOUTS = {
       'Shoot 60 fps or higher. 4K helps when the thrower is far away.'
     ],
     split: false, pin: 'all', dirChoice: false,
-    extraTools: ['plumb', 'level', 'board', 'lens', 'roi'],
+    extraTools: ['plumb', 'level', 'board', 'lens', 'pbox', 'roi'],
     metrics: [
       { k: 'shoulderTilt' }, { k: 'hipTilt' }, { k: 'lean', label: 'Lateral lean' }, { k: 'stance' }, { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }
     ]
@@ -48,7 +51,7 @@ export const LAYOUTS = {
       'Mark the release on each clip, then use Align releases to compare.'
     ],
     split: true, pin: 'all', dirChoice: true,
-    extraTools: ['plumb', 'level', 'path'],
+    extraTools: ['plumb', 'level', 'path', 'pbox'],
     metrics: [
       { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }, { k: 'arm' }, { k: 'lean' }, { k: 'knee' }, { k: 'wristH' }
     ]
@@ -63,7 +66,7 @@ export const LAYOUTS = {
       'Use the path tracer to follow the bag or hand frame by frame.'
     ],
     split: false, pin: 'all', dirChoice: false,
-    extraTools: ['plumb', 'level', 'path', 'lens', 'roi'],
+    extraTools: ['plumb', 'level', 'path', 'lens', 'pbox', 'roi'],
     metrics: [
       { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }, { k: 'shoulderTilt' }, { k: 'hipTilt' }, { k: 'lean', label: 'Lateral lean' }, { k: 'armLine' }
     ]
@@ -78,7 +81,7 @@ export const LAYOUTS = {
       'Keep broadcast footage for private study only.'
     ],
     split: false, pin: 'frame', dirChoice: true,
-    extraTools: ['lens', 'roi'],
+    extraTools: ['lens', 'pbox', 'roi'],
     metrics: [
       { k: 'elbow' }, { k: 'forearm' }, { k: 'wristBend' }, { k: 'arm' }, { k: 'lean' }, { k: 'shoulderTilt' }, { k: 'knee' }
     ]

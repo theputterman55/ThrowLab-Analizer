@@ -1,6 +1,6 @@
 // One video (or photo) pane: media, frame stepping, drawing, body overlay.
 import { drawAnn, annDist, tag } from './annotate.js';
-import { COL, FPS_CHOICES, POINT_SETS, POINT_SET_ORDER, TRACKER_UI } from './config.js';
+import { COL, FPS_CHOICES, POINT_SETS, POINT_SET_ORDER, TRACKER_UI, PLAYER_COLORS } from './config.js';
 import { smoothFrames, packFrames, unpackFrames, TrackSession, bboxOf, followBox } from './pose.js';
 import { roleIndex, throwingWristIndex, computeMetric, angle3, METRIC_DEFS } from './metrics.js';
 
@@ -37,6 +37,8 @@ async function detectFps(v) {
   });
 }
 
+const newPBox = () => ({ 1: { rect: null, spans: [] }, 2: { rect: null, spans: [] } });
+
 export class Pane {
   constructor(id, app) {
     this.id = id; this.app = app;
@@ -46,7 +48,7 @@ export class Pane {
     this.rel = null; this.roi = null; this.lens = null;
     this.raw = null; this.smoothed = null; this.poseInfo = null;
     this.tr = null; this.boxes = null; this.trCount = 0; this.session = null; // tr[f] = 1 where the body tracker has run
-    this.slots = {}; this.slot = { player: 1, throw: 1 }; this.nThrows = 4; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer = 0; this.sv = 0; this.pcache = null; // hand-placed points
+    this.pbox = newPBox(); this.slots = {}; this.slot = { player: 1, throw: 1 }; this.nThrows = 4; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer = 0; this.sv = 0; this.pcache = null; // hand-placed points
     this.analyzing = false; this.seeking = false;
     // View (zoom/pan) in canvas pixels: screen = point * z + (tx, ty). hold locks it.
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null;
@@ -315,7 +317,7 @@ export class Pane {
     this.slot = { player, throw: thr }; this.nThrows = Math.max(this.nThrows, thr);
     this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptChanged();
   }
-  resetSlots() { this.slots = {}; this.slot = { player: 1, throw: 1 }; this.nThrows = 4; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer++; }
+  resetSlots() { this.pbox = newPBox(); this.slots = {}; this.slot = { player: 1, throw: 1 }; this.nThrows = 4; this.ptHist = []; this.ptDraft = null; this.pdrag = null; this.ptVer++; }
   // When the labeled motion starts and ends on this slot (all sets together). open = a set is not finished yet.
   motion() {
     let a = null, b = null, open = false;
@@ -328,6 +330,27 @@ export class Pane {
     return a === null ? null : { start: a, end: b, open };
   }
   allKeys() { const set = new Set(); for (const k of POINT_SET_ORDER) this.keyFrames(k).forEach((x) => set.add(x)); return [...set].sort((x, y) => x - y); }
+
+  // ---------- player boxes (frame driven) ----------
+  // Each player has one box and a list of frame spans where it shows: [from, to] (to = null: until switched off).
+  pboxVisible(player, f) { const b = this.pbox[player]; return !!(b && b.rect) && b.spans.some(([a, z]) => f >= a && (z === null || f <= z)); }
+  pboxCut(player, f) { // switch the box off from frame f on
+    const b = this.pbox[player];
+    b.spans = b.spans.map(([a, z]) => (f >= a && (z === null || f <= z) ? [a, f - 1] : [a, z])).filter(([a, z]) => z === null || z >= a);
+  }
+  pboxOn(player, f) { // show this player's box from frame f; the other player's box goes off at f
+    const b = this.pbox[player]; if (!b || !b.rect) return false;
+    this.pboxCut(player === 1 ? 2 : 1, f);
+    if (!this.pboxVisible(player, f)) b.spans.push([f, null]);
+    this.app.requestRender(); this.app.onPaneChange(this, true); return true;
+  }
+  pboxOff(player, f) { this.pboxCut(player, f); this.app.requestRender(); this.app.onPaneChange(this, true); }
+  pboxClear(player) { this.pbox[player] = { rect: null, spans: [] }; this.app.requestRender(); this.app.onPaneChange(this, true); }
+  pboxText(player) {
+    const b = this.pbox[player]; if (!b.rect) return '';
+    const sp = [...b.spans].sort((x, y) => x[0] - y[0]).map(([a, z]) => `${a + 1}–${z === null ? 'end' : z + 1}`);
+    return sp.length ? `frames ${sp.join(', ')}` : 'switched off';
+  }
 
   // ---------- point labeler ----------
   ptSnap() { this.ptHist.push(JSON.stringify(this.pts)); if (this.ptHist.length > 100) this.ptHist.shift(); }
@@ -531,6 +554,12 @@ export class Pane {
       const [a, b] = [d.pts[0], d.pts[1]];
       return { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) };
     };
+    if (d.type === 'pbox') {
+      const r = rect();
+      if (r.w < 0.01 || r.h < 0.01) return;
+      const pl = this.slot.player; this.pbox[pl].rect = r; this.pboxOn(pl, Math.round(this.f));
+      return;
+    }
     if (d.type === 'roi' || d.type === 'lens') {
       const r = rect();
       if (r.w < 0.01 || r.h < 0.01) return;
@@ -682,6 +711,7 @@ export class Pane {
       if (this.hasTracking()) { if (this.tr[f]) box = this.boxes[f]; else if (st.tool === 'roi') box = this.roi; } else box = this.roi;
       if (box) this.drawBox(ctx, box, W, H, u, 'Player', AMBER);
     }
+    for (const pl of [1, 2]) if (this.pboxVisible(pl, f)) this.drawBox(ctx, this.pbox[pl].rect, W, H, u, `Player ${pl}`, PLAYER_COLORS[pl]);
     if (this.lens && st.layers.lens) this.drawLens(ctx, W, H, u);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const trk = TRACKER_UI && this.hasTracking() ? (this.tr[f] ? ' · tracked' : ' · not tracked') : '';
@@ -690,9 +720,9 @@ export class Pane {
 
   drawDraft(ctx, W, H, f, st) {
     const d = this.draft;
-    if (d.type === 'roi' || d.type === 'lens') {
+    if (d.type === 'roi' || d.type === 'lens' || d.type === 'pbox') {
       const a = d.pts[0], b = d.live;
-      this.drawBox(ctx, { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) }, W, H, W / 1280 / this.vw.z, d.type === 'roi' ? 'Player' : 'Zoom', d.type === 'roi' ? AMBER : '#fff');
+      this.drawBox(ctx, { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) }, W, H, W / 1280 / this.vw.z, d.type === 'pbox' ? `Player ${this.slot.player}` : d.type === 'roi' ? 'Player' : 'Zoom', d.type === 'pbox' ? PLAYER_COLORS[this.slot.player] : d.type === 'roi' ? AMBER : '#fff');
       return;
     }
     let pts;
@@ -806,7 +836,7 @@ export class Pane {
   toJSON() {
     return {
       name: this.nameEl.textContent, fps: this.fps, N: this.N, size: this.media ? [this.media.w, this.media.h] : null,
-      ann: this.ann, rel: this.rel, roi: this.roi, lens: this.lens, slot: this.slot, nThrows: this.nThrows, slots: this.slots,
+      ann: this.ann, rel: this.rel, roi: this.roi, lens: this.lens, pbox: this.pbox, slot: this.slot, nThrows: this.nThrows, slots: this.slots,
       pose: this.raw && this.trCount ? {
         info: this.poseInfo, frames: packFrames(this.raw), ranges: this.ranges(),
         boxes: this.boxes.map((b) => (b ? [b.x, b.y, b.w, b.h].map((v) => Math.round(v * 10000) / 10000) : null))
@@ -816,6 +846,7 @@ export class Pane {
   fromJSON(d) {
     this.ann = d.ann || []; this.hist = []; this.rel = d.rel ?? null; this.roi = d.roi || null; this.lens = d.lens || null;
     this.resetSlots();
+    if (d.pbox) for (const n of [1, 2]) { const q = d.pbox[n]; if (q && q.rect) this.pbox[n] = { rect: q.rect, spans: (q.spans || []).filter((s) => Array.isArray(s)) }; }
     if (d.slots) { this.slots = d.slots; this.slot = d.slot || { player: 1, throw: 1 }; this.nThrows = Math.max(4, d.nThrows || 4, this.slot.throw); }
     else if (d.pts) this.slotData('1-1').pts = d.pts; // older saves (before Player / Throw slots)
     if (d.pose?.frames) this.setPose(unpackFrames(d.pose.frames), d.pose.info, { ranges: d.pose.ranges, boxes: d.pose.boxes });

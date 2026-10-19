@@ -117,3 +117,7 @@ The Follow box only follows a body that is inside it and moves slowly, so a neig
 - **Undo** sits under the step bar.
 - **Player 1 / 2 and Throw 1-4 (+):** each combination keeps its own points and a short description.
 
+## Player boxes (1.7.0)
+
+Pick a player, press **Draw** (or the Player box tool, F), and drag around them. **Show box** turns that player's box on or off from the current frame. Turning one player's box on turns the other off at that frame, so play the clip and the boxes hand off. Player 1 is red, Player 2 is blue. The box does not move by itself; redraw it if the player leaves it.
+

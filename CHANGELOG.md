@@ -8,6 +8,13 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.7.0
+- Player boxes, driven by frame. Next to Player 1 / 2 there is a **Show box** button, **Draw** and **×**. Draw (or the new Player box tool, F, on the left) drags a box around the selected player and turns it on from the current frame.
+- Show box turns that player's box on or off from the frame you press it on. When one player's box turns on, the other player's box turns off at that frame, so the boxes hand off as the clip plays. Switch them on and off as often as you like.
+- Player 1 is red and Player 2 is blue (the Player buttons, the boxes and the timeline bands). Colored bands on the timeline show where each box is on.
+- Boxes are saved with your work and session files. Clear boxes removes both players' boxes and the Zoom box.
+- The old Follow player tool moved to Q (it only appears with ?tracker=1).
+
 ## 1.6.0
 - Arm set in the Point labeler: click the throwing shoulder, elbow, wrist and hand. Three color-coded segments (upper arm, forearm, hand) with the elbow and wrist angles on the video. If you already placed Shoulders on that frame, the arm starts from that shoulder and you only click the elbow, wrist and hand. Move the Shoulders and the arm follows.
 - New measurements: Forearm swing and Wrist angle (next to Elbow angle). Elbow angle now works from your arm points.

@@ -1,4 +1,4 @@
-import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION, TRACKER_UI, POINT_SETS, POINT_SET_ORDER, METRIC_COLORS } from './config.js';
+import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SWATCHES, VERSION, TRACKER_UI, PLAYER_COLORS, POINT_SETS, POINT_SET_ORDER, METRIC_COLORS } from './config.js';
 import { Pane } from './pane.js';
 import { METRIC_DEFS, suggestRelease } from './metrics.js';
 import * as store from './store.js';
@@ -337,6 +337,16 @@ function drawBands() {
     d.style.width = `max(4px, calc((100% - 16px) * ${(b - a) / (p.N - 1)}))`;
     box.appendChild(d);
   }
+  for (const pl of [1, 2]) {
+    for (const [a, z] of p.pbox[pl].rect ? p.pbox[pl].spans : []) {
+      const d = document.createElement('div');
+      const end = z === null ? p.N - 1 : z;
+      d.className = 'pbband'; d.style.setProperty('--c', PLAYER_COLORS[pl]);
+      d.style.left = `calc(8px + (100% - 16px) * ${a / (p.N - 1)})`;
+      d.style.width = `max(4px, calc((100% - 16px) * ${Math.max(0, end - a) / (p.N - 1)}))`;
+      box.appendChild(d);
+    }
+  }
   for (const k of POINT_SET_ORDER) {
     for (const kf of p.keyFrames(k)) {
       const t = document.createElement('div');
@@ -389,7 +399,7 @@ $('#clearRel').onclick = () => { act().rel = null; syncUI(); };
 const undoAny = () => { const p = act(); if (state.pset && p.undoPts()) return; p.undo(); };
 $('#undo').onclick = undoAny;
 $('#clear').onclick = () => act().clearAnn();
-$('#clearBox').onclick = () => { const p = act(); p.roi = null; p.lens = null; dirty = true; syncUI(); };
+$('#clearBox').onclick = () => { const p = act(); p.roi = null; p.lens = null; p.pbox = { 1: { rect: null, spans: [] }, 2: { rect: null, spans: [] } }; dirty = true; syncUI(); };
 
 /* ---------- transport ---------- */
 function step(d) {
@@ -490,13 +500,18 @@ POINT_SET_ORDER.forEach((k) => {
 const fr1 = (n) => n + 1; // frames are shown starting from 1
 let thrCount = 0;
 function updatePtUI() {
-  const p = act();
+  const p = act(), f0 = Math.round(p.f);
   $('#ptPane').textContent = p.id;
   $('#ptSlotLbl').textContent = `Player ${p.slot.player} · Throw ${p.slot.throw}`;
   $$('#ptPlayer button').forEach((b) => { b.setAttribute('aria-pressed', String(+b.dataset.p === p.slot.player)); b.classList.toggle('has', [...Array(p.nThrows)].some((_, i) => p.slotHas(+b.dataset.p, i + 1))); });
   const tb = $('#ptThrow');
   if (thrCount !== p.nThrows) { thrCount = p.nThrows; tb.innerHTML = ''; for (let i = 1; i <= thrCount; i++) { const b = document.createElement('button'); b.dataset.t = i; b.textContent = i; tb.appendChild(b); } }
   $$('#ptThrow button').forEach((b) => { b.setAttribute('aria-pressed', String(+b.dataset.t === p.slot.throw)); b.classList.toggle('has', p.slotHas(p.slot.player, +b.dataset.t)); });
+  // player box button: red / blue, on or off at this frame
+  const pl = p.slot.player, bon = !!p.media && p.pboxVisible(pl, f0);
+  const bt = $('#boxToggle'); bt.style.setProperty('--pc', PLAYER_COLORS[pl]); bt.setAttribute('aria-pressed', String(bon)); bt.textContent = bon ? '✓ Box on' : 'Show box';
+  $('#boxInfo').textContent = p.pbox[pl].rect ? `Player ${pl} box: ${p.pboxText(pl)}. It turns on or off from the frame you press Show box on.` : `No box for Player ${pl} yet. Press Draw (F) and drag around the player.`;
+  $('#boxClear').disabled = !p.pbox[pl].rect;
   const nt = $('#ptNote'); if (document.activeElement !== nt && nt.value !== p.note) nt.value = p.note;
   POINT_SET_ORDER.forEach((k) => {
     const b = $(`.ptset[data-set=${k}]`), s = p.pts[k], ks = p.keyFrames(k);
@@ -534,6 +549,16 @@ $$('#ptPlayer button').forEach((b) => (b.onclick = () => act().switchSlot(+b.dat
 $('#ptThrow').onclick = (e) => { const b = e.target.closest('button'); if (b) act().switchSlot(act().slot.player, +b.dataset.t); };
 $('#ptThrowAdd').onclick = () => { const p = act(); if (p.nThrows >= 12) { toast('12 throws is the most for one clip.'); return; } p.switchSlot(p.slot.player, p.nThrows + 1); };
 $('#ptNote').oninput = (e) => act().setNote(e.target.value);
+// Player boxes: Show box turns this player's box on or off from the current frame (frame driven)
+$('#boxToggle').onclick = () => {
+  const p = act(), pl = p.slot.player, f = Math.round(p.f);
+  if (!p.media) { toast('Open a clip first.'); return; }
+  if (p.pboxVisible(pl, f)) p.pboxOff(pl, f);
+  else if (!p.pbox[pl].rect) { setTool('pbox'); toast(`Drag a box around Player ${pl}.`); }
+  else p.pboxOn(pl, f);
+};
+$('#boxDraw').onclick = () => { if (!act().media) { toast('Open a clip first.'); return; } setTool('pbox'); toast(`Drag a box around Player ${act().slot.player}.`); };
+$('#boxClear').onclick = () => { const p = act(); p.pboxClear(p.slot.player); };
 // Step bar for the labeler
 function goFrame(n) { stopTrack(); state.playing = false; const p = act(); if (p.media) p.f = clamp(n, 0, p.N - 1); syncUI(); dirty = true; }
 $('#ptStart').onclick = () => { const m = act().motion(); goFrame(m ? m.start : 0); };

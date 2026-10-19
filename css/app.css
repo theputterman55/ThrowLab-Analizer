@@ -218,3 +218,12 @@ html:not(.trk-on) .trkonly,html:not(.trk-on) .trband{display:none!important}
 #ptSummary{white-space:pre-line}
 #ptUndo:disabled{opacity:.45;cursor:default}
 .ptk{position:absolute;bottom:6px;width:3px;height:9px;margin-left:-1.5px;background:var(--c);border-radius:1px}
+:root{--p1:#ff4d4d;--p2:#2f6bff}
+#ptPlayer button[data-p="1"]{box-shadow:inset 0 -3px 0 var(--p1)}
+#ptPlayer button[data-p="2"]{box-shadow:inset 0 -3px 0 var(--p2)}
+#ptPlayer button[data-p="1"][aria-pressed="true"]{background:var(--p1);color:#fff}
+#ptPlayer button[data-p="2"][aria-pressed="true"]{background:var(--p2);color:#fff}
+.boxbtn{--pc:var(--p1)}
+.boxbtn[aria-pressed="true"]{background:var(--pc);border-color:var(--pc);color:#fff}
+.pbband{position:absolute;top:0;height:6px;border-radius:3px;background:var(--c);opacity:.9}
+#boxInfo{margin:0 0 4px}

@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.6.0';
+window.__TL_VERSION = '1.7.0';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -57,7 +57,7 @@ window.__TL_VERSION = '1.6.0';
         <div class="inline">
           <button class="btn sm" id="undo">Undo</button>
           <button class="btn sm" id="clear">Clear pane</button>
-          <button class="btn sm" id="clearBox" title="Remove the Follow player and Zoom boxes">Clear boxes</button>
+          <button class="btn sm" id="clearBox" title="Remove the player boxes and the Zoom box">Clear boxes</button>
           <span class="note" id="annCount"></span>
         </div>
       </div>
@@ -97,7 +97,11 @@ window.__TL_VERSION = '1.6.0';
     <section id="ptSec">
       <h3>Point labeler · <span id="ptPane">A</span> · <span id="ptSlotLbl">Player 1 · Throw 1</span></h3>
       <div class="slotrow"><span class="lbl">Player</span>
-        <div class="seg" id="ptPlayer" role="group" aria-label="Player"><button data-p="1" aria-pressed="true">1</button><button data-p="2" aria-pressed="false">2</button></div></div>
+        <div class="seg" id="ptPlayer" role="group" aria-label="Player"><button data-p="1" aria-pressed="true">1</button><button data-p="2" aria-pressed="false">2</button></div>
+        <button class="btn sm boxbtn" id="boxToggle" aria-pressed="false" title="Show or hide this player's box from the current frame on">Show box</button>
+        <button class="btn sm" id="boxDraw" title="Draw this player's box (F)">Draw</button>
+        <button class="btn sm" id="boxClear" title="Remove this player's box">×</button></div>
+      <p class="note" id="boxInfo"></p>
       <div class="slotrow"><span class="lbl">Throw</span>
         <div class="seg" id="ptThrow" role="group" aria-label="Throw number"></div>
         <button class="btn sm" id="ptThrowAdd" title="Add another throw">+</button></div>
