@@ -8,6 +8,11 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.9.5
+- Lines, dots, angle boxes and the P1/P2 badges are sized in screen pixels, so they stay the same readable size at any zoom or video size. Lines are thicker (6 px), dots bigger, box text bigger (24 px numbers), and the boxes have more space between them.
+- Arm boxes: UPPER ARM sits on the middle of the shoulder-to-elbow line, ELBOW on the elbow dot, FOREARM on the middle of the elbow-to-wrist line, WRIST on the wrist dot.
+- Arm no longer asks for the shoulder again: a dashed ring marks the linked shoulder ("click the elbow"), and a click on it is ignored. Arms saved with a second point sitting on the shoulder (which shifted every joint by one) are repaired when loaded; the hand is dropped for those.
+
 ## 1.9.4
 - New **Show both players** checkbox under the P1/P2 buttons. On: the other player's lines (same throw number) are drawn on the video along with the active player's, each with a red P1 / blue P2 badge, and each player's angle boxes are named (P1 ELBOW, P2 ELBOW) and stacked on opposite sides. Editing still follows the P1/P2 buttons. The choice is remembered.
 

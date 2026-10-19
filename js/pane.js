@@ -506,6 +506,10 @@ export class Pane {
     }
     const s = this.pts[key];
     if (s && s.end !== null) { this.app.toast(`${def.label} is finished. Press Edit to change it.`); return; }
+    if (key === 'arm' && this.ptNextIndex(key, f) === 1) { // the shoulder is already linked: a click on it is not the elbow
+      const sh = this.shoulderAnchor(f), [cx, cy] = this.canvasXY(e), sc = this.k * this.vw.z;
+      if (sh && Math.hypot(sh[0] * this.vsz.W * sc + this.vw.tx - cx, sh[1] * this.vsz.H * sc + this.vw.ty - cy) / this.dpr <= 30) { this.app.toast('The shoulder is already linked. Click the elbow.'); return; }
+    }
     if (!this.ptDraft || this.ptDraft.key !== key || this.ptDraft.f !== f) {
       this.ptDraft = { key, f, pts: [] };
       const sh = key === 'arm' ? this.shoulderAnchor(f) : null; // the arm hangs from the shoulder you already placed: the first click is the elbow
@@ -546,49 +550,66 @@ export class Pane {
   // Angle readouts: big boxes stacked in the margin on the side of the video the player is on, each tied to its joint by a leader line.
   drawReadouts(ctx, rd, W, H, u, ext, forceSide) {
     if (!rd.length) return null;
-    const sc = this.k * this.vw.z, v = this.vw;
+    const sc = this.k * this.vw.z, v = this.vw, fit = Math.min(1.15, Math.max(0.6, Math.min(this.cv.width, this.cv.height) / this.dpr / 640));
+    const c = (this.dpr / sc) * fit; // c: video units per screen pixel (scaled a little with the pane), so boxes stay the same size at any zoom or video size
     const x0 = Math.max(0, -v.tx / sc), x1 = Math.min(W, (this.cv.width - v.tx) / sc), y0 = Math.max(0, -v.ty / sc), y1 = Math.min(H, (this.cv.height - v.ty) / sc);
     const left = forceSide ? forceSide === 'left' : rd.reduce((s, r) => s + r.ax, 0) / rd.length < (x0 + x1) / 2; // left player reads on the left, right player on the right
-    const fs = 30 * u, h = 46 * u, gap = 8 * u, m = 14 * u;
+    const fl = 14 * c, fv = 24 * c, h = 44 * c, gap = 18 * c, m = 16 * c;
+    const lab = `600 ${Math.round(fl * 100) / 100}px 'Barlow', system-ui, sans-serif`, val = `700 ${Math.round(fv * 100) / 100}px 'JetBrains Mono', ui-monospace, monospace`;
     ctx.save();
     ctx.textBaseline = 'middle';
     const items = [...rd].sort((a, b) => a.ay - b.ay).map((r) => {
-      ctx.font = `500 ${Math.round(fs * 0.7)}px 'Barlow', system-ui, sans-serif`; const wl = ctx.measureText(r.label.toUpperCase()).width;
-      ctx.font = `700 ${Math.round(fs)}px 'JetBrains Mono', ui-monospace, monospace`; const wv = ctx.measureText(r.text).width;
-      return { ...r, wl, wv, w: wl + wv + 36 * u, y: r.ay };
+      ctx.font = lab; const wl = ctx.measureText(r.label.toUpperCase()).width;
+      ctx.font = val; const wv = ctx.measureText(r.text).width;
+      return { ...r, wl, wv, w: wl + wv + 38 * c, y: r.ay };
     });
     // spread top to bottom so the boxes never overlap, then pull the stack back inside the picture
     items.forEach((it, i) => { it.y = Math.max(it.y, y0 + m + h / 2); if (i) it.y = Math.max(it.y, items[i - 1].y + h + gap); });
     const over = items[items.length - 1].y + h / 2 - (y1 - m); if (over > 0) items.forEach((it) => { it.y -= over; });
-    items.forEach((it, i) => { if (i && it.y < items[i - 1].y + h + gap) it.y = items[i - 1].y + h + gap; });
+    items.forEach((it, i) => { it.y = Math.max(it.y, y0 + m + h / 2); if (i && it.y < items[i - 1].y + h + gap) it.y = items[i - 1].y + h + gap; });
     for (const it of items) {
       // halfway between the edge of the picture and the player's nearest marked point, never touching the player
-      const bx = left ? Math.max(x0 + m, Math.min(x0 + m + (ext[0] - (x0 + m)) * 0.5, ext[0] - 24 * u - it.w)) : Math.min(x1 - m - it.w, Math.max(x1 - m - it.w - ((x1 - m) - ext[1]) * 0.5, ext[1] + 24 * u));
+      const bx = left ? Math.max(x0 + m, Math.min(x0 + m + (ext[0] - (x0 + m)) * 0.5, ext[0] - 24 * c - it.w)) : Math.min(x1 - m - it.w, Math.max(x1 - m - it.w - ((x1 - m) - ext[1]) * 0.5, ext[1] + 24 * c));
       const ex = left ? bx + it.w : bx;
-      ctx.strokeStyle = it.color; ctx.lineWidth = 2.5 * u; ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = it.color; ctx.lineWidth = 3 * c; ctx.globalAlpha = 0.95;
       ctx.beginPath(); ctx.moveTo(ex, it.y); ctx.lineTo(it.ax, it.ay); ctx.stroke();
-      ctx.beginPath(); ctx.arc(it.ax, it.ay, 5 * u, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill();
+      ctx.beginPath(); ctx.arc(it.ax, it.ay, 6 * c, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill(); ctx.lineWidth = 2 * c; ctx.strokeStyle = '#fff'; ctx.stroke();
       ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(0,0,0,.78)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, it.y - h / 2, it.w, h, 8 * u) : ctx.rect(bx, it.y - h / 2, it.w, h); ctx.fill();
-      ctx.lineWidth = 2.5 * u; ctx.strokeStyle = it.color; ctx.stroke();
-      ctx.textAlign = 'left'; ctx.fillStyle = it.color; ctx.font = `500 ${Math.round(fs * 0.7)}px 'Barlow', system-ui, sans-serif`; ctx.fillText(it.label.toUpperCase(), bx + 14 * u, it.y + 1);
-      ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(fs)}px 'JetBrains Mono', ui-monospace, monospace`; ctx.fillText(it.text, bx + 22 * u + it.wl, it.y + 1);
+      ctx.fillStyle = 'rgba(0,0,0,.85)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, it.y - h / 2, it.w, h, 9 * c) : ctx.rect(bx, it.y - h / 2, it.w, h); ctx.fill();
+      ctx.lineWidth = 3 * c; ctx.strokeStyle = it.color; ctx.stroke();
+      ctx.textAlign = 'left'; ctx.fillStyle = it.color; ctx.font = lab; ctx.fillText(it.label.toUpperCase(), bx + 14 * c, it.y + c);
+      ctx.fillStyle = '#fff'; ctx.font = val; ctx.fillText(it.text, bx + 24 * c + it.wl, it.y + c);
     }
     ctx.restore();
     return left ? 'left' : 'right';
   }
 
+  // While Arm is waiting for its first click, ring the shoulder it will hang from.
+  drawShoulderRing(ctx, W, H, f) {
+    if (this.app.state.pset !== 'arm' || this.pdrag) return;
+    const pend = this.ptNextIndex('arm', f) === 1 && !this.setPoints('arm', f) || (this.ptDraft && this.ptDraft.key === 'arm' && this.ptDraft.f === f && this.ptDraft.pts.length === 1);
+    const sh = pend ? this.shoulderAnchor(f) : null; if (!sh) return;
+    const c = this.dpr / (this.k * this.vw.z), x = sh[0] * W, y = sh[1] * H;
+    ctx.save(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 * c; ctx.setLineDash([8 * c, 6 * c]);
+    ctx.beginPath(); ctx.arc(x, y, 30 * c, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = `700 ${Math.round(14 * c * 100) / 100}px 'Barlow', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const t = 'SHOULDER LINKED · CLICK THE ELBOW', w = ctx.measureText(t).width + 18 * c;
+    ctx.fillStyle = 'rgba(0,0,0,.85)'; ctx.fillRect(x - w / 2, y + 40 * c, w, 26 * c); ctx.fillStyle = '#fff'; ctx.fillText(t, x, y + 53 * c);
+    ctx.restore();
+  }
+
   // Draws the active player's lines, and, with "Show both players" on, the other player's lines for the same throw number.
   drawManual(ctx, W, H, f, u, st) {
     const both = !!st.both, side = this.drawManualOne(ctx, W, H, f, u, st, { both });
-    if (!both) return;
+    if (!both) { this.drawShoulderRing(ctx, W, H, f); return; }
     const op = this.slot.player === 1 ? 2 : 1, d = this.slots[this.slotKey(op, this.slot.throw)];
     if (!d || !Object.keys(d.pts).length) return;
     const keep = this.slot; this.slot = { player: op, throw: keep.throw };
+    this.drawShoulderRing(ctx, W, H, f);
     try { this.drawManualOne(ctx, W, H, f, u, st, { both, ghost: true, side: side === 'left' ? 'right' : 'left' }); } finally { this.slot = keep; }
   }
   drawManualOne(ctx, W, H, f, u, st, o = {}) {
-    const px0 = [];
+    const px0 = [], c = this.dpr / (this.k * this.vw.z); // c: video units per screen pixel
     const rd = [], ext = [1e9, -1e9]; // readouts, stacked at the side of the video by drawReadouts; ext = left and right edge of the marked points
     for (const k of POINT_SET_ORDER) {
       const def = POINT_SETS[k], cur = this.livePts(k, f);
@@ -603,14 +624,14 @@ export class Pane {
       if (noH) px.length = 3;
       const nseg = def.chain ? px.length - 1 : Math.min(1, px.length - 1);
       for (let i = 0; i < nseg; i++) {
-        ctx.strokeStyle = def.segColors ? def.segColors[i] : def.color; ctx.lineWidth = (live ? 5 : 4) * u;
+        ctx.strokeStyle = def.segColors ? def.segColors[i] : def.color; ctx.lineWidth = (live ? 7 : 6) * c;
         ctx.beginPath(); ctx.moveTo(px[i][0], px[i][1]); ctx.lineTo(px[i + 1][0], px[i + 1][1]); ctx.stroke();
       }
       px.forEach(([x, y], i) => {
         const col = def.segColors ? def.segColors[Math.max(0, i - 1)] : def.color;
-        ctx.beginPath(); ctx.arc(x, y, (cur && cur.key ? 8 : 6) * u * (live ? 1.15 : 1), 0, Math.PI * 2);
-        if (cur && cur.key) { ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2.5 * u; ctx.strokeStyle = '#fff'; ctx.stroke(); }
-        else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 3 * u; ctx.strokeStyle = col; ctx.stroke(); }
+        ctx.beginPath(); ctx.arc(x, y, (cur && cur.key ? 10 : 8) * c * (live ? 1.15 : 1), 0, Math.PI * 2);
+        if (cur && cur.key) { ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 3 * c; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+        else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 3.5 * c; ctx.strokeStyle = col; ctx.stroke(); }
       });
       if (live && cur) {
         const g = this.handleGeom(k, P, u), dr = this.pdrag && this.pdrag.key === k && this.pdrag.mode === 'rot' ? this.pdrag.delta : 0;
@@ -633,15 +654,19 @@ export class Pane {
       } else if (cur && def.chain && (px.length === 4 || noH)) {
         const fr = this.poseFrame(f);
         const ve = computeMetric('elbow', fr, this.media, st.hand, st.dir), vw = computeMetric('wristBend', fr, this.media, st.hand, st.dir);
-        if (ve !== null) rd.push({ label: 'Elbow', text: METRIC_DEFS.elbow.fmt(ve), color: def.segColors[0], ax: (px[0][0] + px[1][0]) / 2, ay: (px[0][1] + px[1][1]) / 2 });
-        if (vw !== null && !noH) rd.push({ label: 'Wrist', text: METRIC_DEFS.wristBend.fmt(vw), color: def.segColors[2], ax: (px[1][0] + px[2][0]) / 2, ay: (px[1][1] + px[2][1]) / 2 });
+        const vu = computeMetric('arm', fr, this.media, st.hand, st.dir), vf = computeMetric('forearm', fr, this.media, st.hand, st.dir);
+        const mid = (a, b) => ({ ax: (a[0] + b[0]) / 2, ay: (a[1] + b[1]) / 2 });
+        if (vu !== null) rd.push({ label: 'Upper arm', text: METRIC_DEFS.arm.fmt(vu), color: def.segColors[0], ...mid(px[0], px[1]) }); // shoulder to elbow, on the middle of that line
+        if (ve !== null) rd.push({ label: 'Elbow', text: METRIC_DEFS.elbow.fmt(ve), color: def.segColors[0], ax: px[1][0], ay: px[1][1] });
+        if (vf !== null) rd.push({ label: 'Forearm', text: METRIC_DEFS.forearm.fmt(vf), color: def.segColors[1], ...mid(px[1], px[2]) }); // elbow to wrist
+        if (vw !== null && !noH) rd.push({ label: 'Wrist', text: METRIC_DEFS.wristBend.fmt(vw), color: def.segColors[2], ax: px[2][0], ay: px[2][1] });
       }
       ctx.restore();
     }
     if (o.both && px0.length) { // player badge over the first marked point
-      const pl = this.slot.player; ctx.save(); ctx.font = `700 ${Math.round(22 * u)}px 'JetBrains Mono', ui-monospace, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const [bx, by] = px0[0], w = 46 * u; ctx.fillStyle = PLAYER_COLORS[pl]; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - w / 2, by - 44 * u, w, 28 * u, 6 * u) : ctx.rect(bx - w / 2, by - 44 * u, w, 28 * u); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.fillText('P' + pl, bx, by - 29 * u); ctx.restore();
+      const pl = this.slot.player; ctx.save(); ctx.font = `700 ${Math.round(18 * c * 100) / 100}px 'JetBrains Mono', ui-monospace, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const [bx, by] = px0[0], w = 40 * c; ctx.fillStyle = PLAYER_COLORS[pl]; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - w / 2, by - 46 * c, w, 28 * c, 6 * c) : ctx.rect(bx - w / 2, by - 46 * c, w, 28 * c); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillText('P' + pl, bx, by - 31 * c); ctx.restore();
       rd.forEach((r) => { r.label = 'P' + pl + ' ' + r.label; });
     }
     return this.drawReadouts(ctx, rd, W, H, u, ext, o.side);
@@ -1005,6 +1030,18 @@ export class Pane {
   }
 
   // ---------- save / load ----------
+  // Older arms could end up with a second point sitting on the shoulder (the shoulder clicked again as the elbow), which shifts every joint by one. Drop it.
+  repairArms() {
+    for (const sd of Object.values(this.slots)) {
+      const s = sd.pts && sd.pts.arm; if (!s) continue;
+      for (const k of Object.keys(s.kf)) {
+        const a = s.kf[k]; if (!a || a.length !== 4) continue;
+        if (Math.abs(a[0][0] - a[1][0]) < 0.02 && Math.abs(a[0][1] - a[1][1]) < 0.02) {
+          const e = a[2], w = a[3]; s.kf[k] = [a[0], e, w, [w[0] + (w[0] - e[0]) * 0.3, w[1] + (w[1] - e[1]) * 0.3]]; s.noHand = true;
+        }
+      }
+    }
+  }
   toJSON() {
     return {
       name: this.nameEl.textContent, fps: this.fps, N: this.N, size: this.media ? [this.media.w, this.media.h] : null,
@@ -1021,6 +1058,7 @@ export class Pane {
     if (d.pbox) for (const n of [1, 2]) { const q = d.pbox[n]; if (q && q.rect) this.pbox[n] = { rect: q.rect, spans: (q.spans || []).filter((s) => Array.isArray(s)) }; }
     if (d.slots) { this.slots = d.slots; this.slot = d.slot || { player: 1, throw: 1 }; this.nThrows = Math.max(4, d.nThrows || 4, this.slot.throw); }
     else if (d.pts) this.slotData('1-1').pts = d.pts; // older saves (before Player / Throw slots)
+    this.repairArms();
     if (d.pose?.frames) this.setPose(unpackFrames(d.pose.frames), d.pose.info, { ranges: d.pose.ranges, boxes: d.pose.boxes });
   }
 }

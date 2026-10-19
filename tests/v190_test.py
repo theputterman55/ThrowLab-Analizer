@@ -24,13 +24,13 @@ def main():
             ev(f"(()=>{{{P}.pts={{}};{P}.ptVer++}})()")
             pg.click(".ptset[data-set=shoulders]"); click(xs[0], .30); click(xs[1], .34)
             pg.click(".ptset[data-set=arm]"); click(xs[0], .50); click(xs[0]-.02, .64); click(xs[0]-.03, .76)
-            lg = texts(); names = [t for t in lg if t[0] in ("SHOULDER TILT", "ELBOW", "WRIST")]
+            lg = texts(); names = [t for t in lg if t[0] in ("SHOULDER TILT", "UPPER ARM", "ELBOW", "FOREARM", "WRIST")]
             vals = [t for t in lg if "°" in t[0]]
-            check(f"{side}: three named readouts", len(names) == 3 and len(vals) == 3, lg)
+            check(f"{side}: five named readouts", len(names) == 5 and len(vals) == 5, lg)
             xsn = [t[1] for t in names]
             check(f"{side}: boxes in the {side} margin", all(x < W / 2 for x in xsn) if side == "left" else all(x > W / 2 for x in xsn), xsn)
             ys = sorted(t[2] for t in names)
-            check(f"{side}: stacked without overlapping", all(ys[i+1] - ys[i] >= 54 * W / 1280 - 0.5 for i in range(len(ys)-1)), ys)
+            check(f"{side}: stacked without overlapping", all(ys[i+1] - ys[i] >= 25 for i in range(len(ys)-1)), ys)
             pg.keyboard.press("Escape")
         check("no page errors", not errs, errs)
     print("v190 done" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

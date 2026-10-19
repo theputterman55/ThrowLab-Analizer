@@ -78,7 +78,7 @@ def main():
         # --- Arm: shoulder stays on the Shoulders points, rest of the arm moves/turns
         pg.click(".ptset[data-set=arm]")
         ev(f"{P}.f = 0"); pg.wait_for_timeout(100)
-        click(.45,.55); click(.60,.65); click(.70,.55)
+        click(.45,.74); click(.60,.84); click(.70,.74)
         arm = kf("arm"); sh = kf("shoulders", 0)[0]
         el0 = arm[1]; wr0 = arm[2]; hd0 = arm[3]
         g = ev(f"(()=>{{const p={P};return p.handleGeom('arm', p.livePts('arm',0).pts, {u})}})()")
