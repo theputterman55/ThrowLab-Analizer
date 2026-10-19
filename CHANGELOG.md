@@ -6,7 +6,12 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 - **MINOR** changes when a new feature or tool is added.
 - **PATCH** changes for fixes and small tweaks that add nothing new.
 
-The current version is shown next to the ThrowLab name (top left) and is set in `js/config.js`.
+The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
+
+## 1.3.0
+- Your work is kept when you refresh or update: clips, drawings, boxes, release marks, body tracking, frame position, layout and hand. Stored in this browser only.
+- New "Saved work" section in the side panel: on/off switch and Clear saved work.
+- Cache busting: each new version loads fresh code instead of an old cached copy.
 
 ## 1.2.1
 - Zoom now fills the whole viewing window instead of the video box; pan stops at the video edge.

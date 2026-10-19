@@ -7,7 +7,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css">
+<script>
+// One place to set the app version. It also busts the browser cache so an update always loads fresh code.
+window.__TL_VERSION = '1.3.0';
+(function () {
+  var V = window.__TL_VERSION, imp = {};
+  ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
+    var u = new URL('js/' + m + '.js', document.baseURI).href; imp[u] = u + '?v=' + V;
+  });
+  var s = document.createElement('script'); s.type = 'importmap'; s.textContent = JSON.stringify({ imports: imp });
+  document.head.appendChild(s);
+  document.write('<link rel="stylesheet" href="css/app.css?v=' + V + '">');
+})();
+</script>
 </head>
 <body>
 <div class="app" id="app">
@@ -94,6 +106,13 @@
         <button class="btn sm" id="suggest" title="Pick the frame where the throwing wrist moves fastest">Suggest release</button>
         <button class="btn sm" id="clearRel">Clear release</button>
       </div>
+    </section>
+
+    <section>
+      <h3>Saved work</h3>
+      <label class="chk"><input type="checkbox" id="keepWork" checked> Keep my work when I refresh or update</label>
+      <div class="inline" style="margin-top:8px"><button class="btn sm" id="clearSaved" title="Delete the clips and drawings kept in this browser. The screen you have open stays as it is.">Clear saved work</button></div>
+      <p class="note" id="savedNote">Kept in this browser only. Nothing is uploaded.</p>
     </section>
 
     <section>

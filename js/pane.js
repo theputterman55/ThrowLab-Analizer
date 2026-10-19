@@ -135,12 +135,13 @@ export class Pane {
     this.url = null; this.media = null;
   }
 
-  async loadFile(file) {
+  // opts.restore: reopening saved work (skip frame-rate detection and do not re-store the file). opts.fps: saved frame rate.
+  async loadFile(file, opts = {}) {
     this.release();
     this.nameEl.textContent = file.name;
     this.metaEl.textContent = 'Loading…';
     const url = URL.createObjectURL(file);
-    this.url = url;
+    this.url = url; this.file = file;
     try {
       const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name);
       if (isImg) {
@@ -156,8 +157,8 @@ export class Pane {
         if (!v.videoWidth) throw new Error('This video has no picture track the browser can read.');
         this.media = { type: 'video', el: v, w: v.videoWidth, h: v.videoHeight, dur: v.duration };
         this.metaEl.textContent = 'Detecting frame rate…';
-        const fps = await detectFps(v);
-        if (fps) { this.fps = fps; this.fpsSource = 'detected'; } else { this.fps = this.app.state.fps; this.fpsSource = 'default'; }
+        const fps = opts.fps || await detectFps(v);
+        if (fps) { this.fps = fps; this.fpsSource = opts.fps ? 'restored' : 'detected'; } else { this.fps = this.app.state.fps; this.fpsSource = 'default'; }
         this.N = Math.max(1, Math.round(v.duration * this.fps));
       }
     } catch (err) {
@@ -175,6 +176,7 @@ export class Pane {
     this.emptyEl.hidden = true;
     this.updateMeta();
     if (this.media.type === 'video') await this.seekTo(0);
+    if (!opts.restore) this.app.fileLoaded?.(this, file);
     this.app.onMediaLoaded(this);
   }
 
@@ -183,7 +185,7 @@ export class Pane {
     const m = this.media;
     this.metaEl.textContent = m.type === 'image'
       ? `${m.w}×${m.h} photo`
-      : `${m.w}×${m.h} · ${this.fps} fps${this.fpsSource === 'detected' ? '' : ' (assumed)'}`;
+      : `${m.w}×${m.h} · ${this.fps} fps${this.fpsSource === 'default' ? ' (assumed)' : ''}`;
   }
 
   setFps(fps) {

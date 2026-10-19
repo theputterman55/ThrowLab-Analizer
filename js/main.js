@@ -2,6 +2,7 @@ import { LAYOUTS, LAYOUT_ORDER, TOOL_DEFS, CORE_TOOLS, toolsFor, FPS_CHOICES, SW
 import { Pane } from './pane.js';
 import { analyze } from './pose.js';
 import { METRIC_DEFS, suggestRelease } from './metrics.js';
+import * as store from './store.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -11,9 +12,10 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const PREF_KEY = 'tl.prefs.v1';
 const loadPrefs = () => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch (_) { return {}; } };
 const prefs = loadPrefs();
+let keep = prefs.keep !== false; // keep my work across refreshes
 function savePrefs() {
   try {
-    localStorage.setItem(PREF_KEY, JSON.stringify({ layout: state.layout, hand: state.hand, dir: state.dir, model: state.model, smooth: state.smooth, zoomCrop: state.zoomCrop, fps: state.fps }));
+    localStorage.setItem(PREF_KEY, JSON.stringify({ layout: state.layout, hand: state.hand, dir: state.dir, model: state.model, smooth: state.smooth, zoomCrop: state.zoomCrop, fps: state.fps, keep }));
   } catch (_) { /* storage may be blocked */ }
 }
 
@@ -46,7 +48,7 @@ const app = {
   stageEl: $('#stage'),
   compareEl: $('#compare'),
   requestRender: () => { dirty = true; },
-  setActive, onPaneChange, onMediaLoaded, toast,
+  setActive, onPaneChange, onMediaLoaded, toast, fileLoaded,
   setTool: (id) => setTool(id)
 };
 $('#ver').textContent = 'v' + VERSION;
@@ -471,11 +473,83 @@ function loop(ts) {
     visPanes().forEach((p) => p.render());
     tickUI();
     updateCompare();
+    if (!state.playing) scheduleSave();
   }
   requestAnimationFrame(loop);
 }
 
+/* ---------- keep my work across refreshes ---------- */
+let restoring = false, saveTimer = 0, storeWarned = false, persistAsked = false;
+const warnStore = () => { if (!storeWarned) { storeWarned = true; toast('This browser would not keep the clip. Your drawings are still saved, but you will need to reopen the video after a refresh.'); } };
+function fileLoaded(p, file) {
+  if (!keep) return;
+  if (!persistAsked) { persistAsked = true; try { navigator.storage?.persist?.(); } catch (_) { /* ignore */ } }
+  store.put('file:' + p.id, file).catch(warnStore);
+  scheduleSave();
+}
+function scheduleSave() {
+  if (!keep || restoring) return;
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveWork, 800);
+}
+async function saveWork() {
+  clearTimeout(saveTimer);
+  if (!keep || restoring || !panes.some((p) => p.media)) return;
+  try {
+    await store.put('state', {
+      v: 1, appVersion: VERSION, savedAt: Date.now(),
+      layout: state.layout, hand: state.hand, dir: state.dir, split: state.split, active: state.active,
+      tool: state.tool, color: state.color, w: state.w, pin: state.pin, speed: state.speed, loop: state.loop, link: state.link,
+      panes: panes.map((p) => ({ ...p.toJSON(), has: !!p.media, f: Math.round(p.f) }))
+    });
+    $('#savedNote').textContent = 'Saved in this browser at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '. Nothing is uploaded.';
+  } catch (_) { warnStore(); }
+}
+async function restoreWork() {
+  if (!keep) return;
+  let st, files;
+  try { st = await store.get('state'); files = await Promise.all(['A', 'B'].map((id) => store.get('file:' + id))); } catch (_) { return; }
+  if (!st || !Array.isArray(st.panes) || !files.some(Boolean)) return;
+  restoring = true;
+  try {
+    state.layoutChosen = true;
+    state.hand = st.hand === 'L' ? 'L' : 'R'; state.dir = st.dir === -1 ? -1 : 1;
+    for (let i = 0; i < 2; i++) {
+      const pd = st.panes[i], p = panes[i];
+      if (!files[i] || !pd || !pd.has) continue;
+      await p.loadFile(files[i], { restore: true, fps: pd.fps });
+      if (!p.media) continue;
+      p.fromJSON(pd);
+      p.f = clamp(pd.f || 0, 0, p.N - 1);
+      if (p.media.type === 'video') await p.seekTo(Math.round(p.f));
+    }
+    applyLayout(LAYOUTS[st.layout] ? st.layout : state.layout);
+    state.split = !!st.split && !!panes[1].media; state.active = state.split && st.active === 'B' ? 'B' : 'A';
+    if (st.pin === 'frame' || st.pin === 'all') state.pin = st.pin;
+    if (typeof st.color === 'string') state.color = st.color;
+    if ([3, 5, 8].includes(st.w)) state.w = st.w;
+    if (toolsFor(state.layout).includes(st.tool)) state.tool = st.tool;
+    if ([0.1, 0.25, 0.5, 1].includes(st.speed)) state.speed = st.speed;
+    state.loop = st.loop !== false; state.link = st.link !== false;
+    $('#speed').value = String(state.speed);
+    buildTools(); syncUI(); dirty = true;
+    const names = panes.filter((p) => p.media).map((p) => p.nameEl.textContent).join(' and ');
+    toast('Restored your last session: ' + names + '. Use "Clear saved work" in the side panel to start fresh.');
+  } catch (err) { toast('Could not restore your last session.'); } finally { restoring = false; }
+}
+$('#keepWork').checked = keep;
+$('#keepWork').onchange = (e) => {
+  keep = e.target.checked; savePrefs();
+  if (keep) { panes.forEach((p) => { if (p.file) store.put('file:' + p.id, p.file).catch(warnStore); }); scheduleSave(); toast('Your work will be kept when you refresh.'); }
+  else { clearTimeout(saveTimer); store.clearAll().catch(() => {}); $('#savedNote').textContent = 'Not saving. Refreshing will clear your work.'; toast('Saving is off. Saved work was deleted from this browser.'); }
+};
+$('#clearSaved').onclick = () => {
+  clearTimeout(saveTimer);
+  store.clearAll().then(() => { $('#savedNote').textContent = 'Saved work cleared.'; toast('Saved work cleared. What is on screen stays until you refresh.'); }).catch(() => toast('Nothing to clear.'));
+};
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveWork(); });
+window.addEventListener('pagehide', () => { saveWork(); });
+
 buildTools(); buildMeas(); syncUI();
 if (document.fonts?.ready) document.fonts.ready.then(() => { dirty = true; });
 requestAnimationFrame(loop);
-window.__throwlab = { state, panes, applyLayout, runAnalysis };
+window.__throwlab = { state, panes, applyLayout, runAnalysis, restored: restoreWork() };

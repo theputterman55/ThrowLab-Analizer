@@ -86,4 +86,8 @@ Body tracking uses Google MediaPipe, licensed under Apache-2.0. See `NOTICE.md`.
 
 ## Versions
 
-The version shows beside the ThrowLab name. It is MAJOR.MINOR.PATCH: a new feature raises the middle number (1.2.1 to 1.3.0), a fix raises the last (1.2.1 to 1.2.2), and a big rework raises the first. History is in CHANGELOG.md. Change `VERSION` in `js/config.js` when you push.
+The version shows beside the ThrowLab name. It is MAJOR.MINOR.PATCH: a new feature raises the middle number (1.2.1 to 1.3.0), a fix raises the last (1.2.1 to 1.2.2), and a big rework raises the first. History is in CHANGELOG.md. Set `window.__TL_VERSION` in `index.html` when you push (it also forces browsers to fetch the new code). If you add a new file under `js/`, add its name to the list in `index.html` too.
+
+## Saved work
+
+Clips, drawings, release marks, body tracking and layout are saved in this browser (IndexedDB) as you work and restored on refresh or after an app update. Turn it off or clear it under **Saved work** in the side panel. Nothing is uploaded. Clearing browser site data deletes it.
