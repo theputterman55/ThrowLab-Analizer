@@ -8,6 +8,10 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.8.3
+- Arm set hangs from the Shoulders dot: its first click is the elbow, then the wrist, then the hand. This also works on frames outside the Shoulders range (it uses the nearest shoulder keyframe).
+- Hand is optional: press Finish after the wrist to leave it out. The wrist angle then stays blank.
+
 ## 1.8.2
 - Right panel about 25% larger: wider column, bigger text and buttons.
 - Point labeler is now at the top of the panel, with stacked, boxed groups: Point sets (sets stacked, then Undo / Finish / Rotate (S) / Clear set in a 2x2 grid), Step through the clip, Player, Throw.

@@ -539,7 +539,7 @@ function updatePtUI() {
   if (!p.media) hint = 'Open a clip first.';
   else if (cur) hint = cur.key ? 'Keyframe. Drag a dot to move it, or the center dot to slide the whole line (S shows the rotate pin). Press D for the next frame.' : 'Following your earlier points. Drag a dot only where the joint has moved, or the center dot to slide the whole line (S shows the rotate pin). Then press D.';
   else if (s && s.end !== null) hint = `${def.label} is finished. Press Edit to change it.`;
-  else { const i = p.ptNextIndex(key, f); hint = `Click the ${def.names.slice(i).join(', then the ')} on the video.${key === 'arm' && i === 1 ? ' The shoulder comes from your Shoulders points.' : ''}`; }
+  else { const i = p.ptNextIndex(key, f); hint = key === 'arm' && i === 3 ? 'Click the hand, or press Finish to skip it.' : `Click the ${def.names.slice(i).join(', then the ')} on the video.${key === 'arm' && i === 1 ? ' The shoulder is already linked to your Shoulders points.' : ''}`; }
   $('#ptHint').textContent = hint;
   $('#ptHint').classList.toggle('helptext', !!cur); // the long how-to line hides unless help is on; the 'click the next point' prompt stays
   $('#ptRotate').setAttribute('aria-pressed', String(state.prot));
@@ -589,6 +589,7 @@ $('#ptNextKey').onclick = () => { const p = act(), f = Math.round(p.f), ks = p.a
 $('#ptUndo').onclick = () => { if (!act().undoPts()) toast('Nothing to undo.'); };
 $('#ptDone').onclick = () => {
   const key = state.pset; if (!key) return;
+  if (act().finishDraft(key)) { toast('Arm set without the hand. Step with D to keep going.'); return; }
   const r = act().toggleDone(key);
   if (r === 'none') toast('Place the points first.');
   else if (r === 'early') toast('Step to the last frame of the motion, then press Finish.');

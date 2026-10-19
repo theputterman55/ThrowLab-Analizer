@@ -299,7 +299,7 @@ export class Pane {
     for (const k of Object.keys(this.pts).sort((a, b) => (b === 'arm') - (a === 'arm'))) { // the Arm set goes first so Shoulders wins on the shared shoulder
       const cur = this.setPoints(k, f); if (!cur || !POINT_SETS[k]) continue;
       if (out === base) out = base ? Float32Array.from(base) : new Float32Array(99);
-      POINT_SETS[k].roles.forEach((r, j) => { const i = roleIndex(r, hand) * 3; out[i] = cur.pts[j][0]; out[i + 1] = cur.pts[j][1]; out[i + 2] = 1; });
+      POINT_SETS[k].roles.forEach((r, j) => { if (r === 'hand' && this.pts[k].noHand) return; const i = roleIndex(r, hand) * 3; out[i] = cur.pts[j][0]; out[i + 1] = cur.pts[j][1]; out[i + 2] = 1; });
     }
     this.pcache = { key, v: out };
     return out;
@@ -373,14 +373,30 @@ export class Pane {
   livePts(key, f) {
     const cur = this.setPoints(key, f); if (!cur) return null;
     if (key !== 'arm') return cur;
-    const sh = this.setPoints('shoulders', f); if (!sh) return cur;
-    const pts = cur.pts.map((q) => [q[0], q[1]]); pts[0] = [sh.pts[0][0], sh.pts[0][1]];
+    const sh = this.shoulderAnchor(f); if (!sh) return cur;
+    const pts = cur.pts.map((q) => [q[0], q[1]]); pts[0] = [sh[0], sh[1]];
     return { pts, key: cur.key, linked: true };
+  }
+  // The throwing shoulder of the Shoulders set on frame f. Outside its range the nearest keyframe is used, so the arm always has a shoulder to hang from.
+  shoulderAnchor(f) {
+    const s = this.pts.shoulders, ks = this.keyFrames('shoulders'); if (!s || !ks.length) return null;
+    const cur = this.setPoints('shoulders', f); if (cur) return cur.pts[0];
+    return s.kf[f < ks[0] ? ks[0] : ks[ks.length - 1]][0];
+  }
+  // Arm with the hand left out: Finish while the draft holds shoulder, elbow, wrist.
+  finishDraft(key) {
+    const d = this.ptDraft; if (!d || d.key !== key || key !== 'arm' || d.pts.length !== 3) return false;
+    const [e, w] = [d.pts[1], d.pts[2]];
+    this.ptSnap();
+    if (!this.pts[key]) this.pts[key] = { kf: {}, end: null };
+    this.pts[key].kf[d.f] = [...d.pts, [w[0] + (w[0] - e[0]) * 0.3, w[1] + (w[1] - e[1]) * 0.3]];
+    this.pts[key].noHand = true; this.ptDraft = null; this.ptChanged();
+    return true;
   }
   // Which point of a set the next click places on frame f.
   ptNextIndex(key, f) {
     if (this.ptDraft && this.ptDraft.key === key && this.ptDraft.f === f) return this.ptDraft.pts.length;
-    return key === 'arm' && this.setPoints('shoulders', f) ? 1 : 0;
+    return key === 'arm' && this.shoulderAnchor(f) ? 1 : 0;
   }
   ensureKey(key, f) {
     const s = this.pts[key]; if (!s) return null;
@@ -394,7 +410,7 @@ export class Pane {
   handleGeom(key, pts, u) {
     const W = this.vsz.W, H = this.vsz.H, P = pts.map((q) => [q[0] * W, q[1] * H]);
     let center, pivot;
-    if (key === 'arm') { center = [(P[1][0] + P[2][0] + P[3][0]) / 3, (P[1][1] + P[2][1] + P[3][1]) / 3]; pivot = P[0]; }
+    if (key === 'arm') { const n = this.pts.arm && this.pts.arm.noHand ? 2 : 3; let sx = 0, sy = 0; for (let i = 1; i <= n; i++) { sx += P[i][0]; sy += P[i][1]; } center = [sx / n, sy / n]; pivot = P[0]; }
     else { center = [(P[0][0] + P[1][0]) / 2, (P[0][1] + P[1][1]) / 2]; pivot = center; }
     return { center, pivot, pin: [pivot[0], pivot[1] + PIN_LEN * u] };
   }
@@ -457,7 +473,7 @@ export class Pane {
       // Grab the nearest dot; a click far from any dot moves the nearest one there.
       const [cx, cy] = this.canvasXY(e), sc = this.k * this.vw.z, v = this.vw;
       let best = 0, bd = 1e9;
-      cur.pts.forEach((p, j) => { if (cur.linked && j === 0) return; const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
+      cur.pts.forEach((p, j) => { if ((cur.linked && j === 0) || (j === 3 && key === 'arm' && this.pts.arm && this.pts.arm.noHand)) return; const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
       this.ptSnap();
       const kf = this.ensureKey(key, f);
       if (!kf) { this.ptHist.pop(); return; }
@@ -471,14 +487,14 @@ export class Pane {
     if (s && s.end !== null) { this.app.toast(`${def.label} is finished. Press Edit to change it.`); return; }
     if (!this.ptDraft || this.ptDraft.key !== key || this.ptDraft.f !== f) {
       this.ptDraft = { key, f, pts: [] };
-      const sh = key === 'arm' ? this.setPoints('shoulders', f) : null; // the arm starts at the shoulder you already placed
-      if (sh) this.ptDraft.pts.push([sh.pts[0][0], sh.pts[0][1]]);
+      const sh = key === 'arm' ? this.shoulderAnchor(f) : null; // the arm hangs from the shoulder you already placed: the first click is the elbow
+      if (sh) this.ptDraft.pts.push([sh[0], sh[1]]);
     }
     this.ptDraft.pts.push([q[0], q[1]]);
     if (this.ptDraft.pts.length === def.roles.length) {
       this.ptSnap();
       if (!this.pts[key]) this.pts[key] = { kf: {}, end: null };
-      this.pts[key].kf[f] = this.ptDraft.pts; this.ptDraft = null;
+      this.pts[key].kf[f] = this.ptDraft.pts; delete this.pts[key].noHand; this.ptDraft = null;
       this.ptChanged();
     } else this.app.requestRender();
   }
@@ -514,6 +530,8 @@ export class Pane {
       const px = P.map((p) => [p[0] * W, p[1] * H]), live = st.pset === k;
       ctx.save();
       ctx.lineCap = 'round';
+      const noH = k === 'arm' && cur && this.pts.arm && this.pts.arm.noHand;
+      if (noH) px.length = 3;
       const nseg = def.chain ? px.length - 1 : Math.min(1, px.length - 1);
       for (let i = 0; i < nseg; i++) {
         ctx.strokeStyle = def.segColors ? def.segColors[i] : def.color; ctx.lineWidth = (live ? 5 : 4) * u;
@@ -543,7 +561,7 @@ export class Pane {
       if (cur && !def.chain && px.length === 2) {
         const v = computeMetric(def.metric, this.poseFrame(f), this.media, st.hand, st.dir);
         if (v !== null) tag(ctx, METRIC_DEFS[def.metric].fmt(v), (px[0][0] + px[1][0]) / 2, Math.min(px[0][1], px[1][1]) - 26 * u, u);
-      } else if (cur && def.chain && px.length === 4) {
+      } else if (cur && def.chain && (px.length === 4 || noH)) {
         const fr = this.poseFrame(f);
         const ve = computeMetric('elbow', fr, this.media, st.hand, st.dir), vw = computeMetric('wristBend', fr, this.media, st.hand, st.dir);
         if (ve !== null) tag(ctx, METRIC_DEFS.elbow.fmt(ve), px[1][0] + 44 * u, px[1][1] - 20 * u, u);
