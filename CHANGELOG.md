@@ -8,6 +8,11 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.9.6
+- Angle boxes, lines and dots now keep one size on screen while you zoom in, and shrink with the picture when you zoom all the way out (no more huge boxes on a small clip).
+- Boxes and text are 30% smaller. Tracking lines are 25% thinner. The end dots (knobs) are about 75% smaller, and the leader-line dots are smaller too.
+- When you zoom in, the box stack slides further toward the edge of the view (away from the player).
+
 ## 1.9.5
 - Lines, dots, angle boxes and the P1/P2 badges are sized in screen pixels, so they stay the same readable size at any zoom or video size. Lines are thicker (6 px), dots bigger, box text bigger (24 px numbers), and the boxes have more space between them.
 - Arm boxes: UPPER ARM sits on the middle of the shoulder-to-elbow line, ELBOW on the elbow dot, FOREARM on the middle of the elbow-to-wrist line, WRIST on the wrist dot.

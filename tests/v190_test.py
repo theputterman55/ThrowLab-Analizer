@@ -30,7 +30,7 @@ def main():
             xsn = [t[1] for t in names]
             check(f"{side}: boxes in the {side} margin", all(x < W / 2 for x in xsn) if side == "left" else all(x > W / 2 for x in xsn), xsn)
             ys = sorted(t[2] for t in names)
-            check(f"{side}: stacked without overlapping", all(ys[i+1] - ys[i] >= 25 for i in range(len(ys)-1)), ys)
+            check(f"{side}: stacked without overlapping", all(ys[i+1] - ys[i] >= 15 for i in range(len(ys)-1)), ys)
             pg.keyboard.press("Escape")
         check("no page errors", not errs, errs)
     print("v190 done" if not fails else f"{len(fails)} FAILED"); sys.exit(1 if fails else 0)

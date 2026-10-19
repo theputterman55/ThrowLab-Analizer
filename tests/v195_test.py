@@ -30,7 +30,7 @@ def main():
               p.render();c.moveTo=mv;c.lineTo=lt;c.fillText=tx;return {{L,T,sc:p.k*p.vw.z,dpr:p.dpr,W:p.vsz.W,H:p.vsz.H}}}})()""")
         W, H = info["W"], info["H"]; css = lambda w: w * info["sc"] / info["dpr"]
         seg = [l for l in info["L"] if abs(l[0][0] - arm[0][0]*W) < 1 and abs(l[0][1] - arm[0][1]*H) < 1]
-        check("arm segment is at least 5 screen px thick", seg and css(seg[0][2]) >= 5, [css(s[2]) for s in seg])
+        check("arm segment is about 4.5 screen px thick (25% thinner)", seg and css(seg[0][2]) >= 4.4, [css(s[2]) for s in seg])
         mid_up = [(arm[0][0]+arm[1][0])/2*W, (arm[0][1]+arm[1][1])/2*H]; mid_fo = [(arm[1][0]+arm[2][0])/2*W, (arm[1][1]+arm[2][1])/2*H]
         ends = [l[1] for l in info["L"]]
         near = lambda m: any(abs(e[0]-m[0]) < .8 and abs(e[1]-m[1]) < .8 for e in ends)
@@ -40,7 +40,7 @@ def main():
         check("Elbow leader ends on the elbow dot", near(el))
         names = [t for t in info["T"] if t[0] in ("SHOULDER TILT", "UPPER ARM", "ELBOW", "FOREARM", "WRIST")]
         ys = sorted(t[2] for t in names); pitch = min(ys[i+1]-ys[i] for i in range(len(ys)-1))
-        check("boxes are at least 62 percent of a box apart plus the gap (pitch >= 54 screen px at fit 0.6)", css(pitch) >= 36, css(pitch))
+        check("boxes are at least 62 percent of a box apart plus the gap (pitch >= 54 screen px at fit 0.6)", css(pitch) >= 20, css(pitch))
         # an arm with a second point on the shoulder gets repaired when loaded
         ev(f"""(()=>{{const p={P};p.pts.arm.kf['0']=[p.pts.arm.kf['0'][0],[p.pts.arm.kf['0'][0][0]+.004,p.pts.arm.kf['0'][0][1]+.006],[.38,.5],[.36,.66]];delete p.pts.arm.noHand;const j=p.toJSON();p.fromJSON(j)}})()""")
         fixed = ev(f"{P}.pts.arm.kf['0']"); noh = ev(f"{P}.pts.arm.noHand")

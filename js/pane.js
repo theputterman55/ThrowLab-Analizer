@@ -550,9 +550,11 @@ export class Pane {
   // Angle readouts: big boxes stacked in the margin on the side of the video the player is on, each tied to its joint by a leader line.
   drawReadouts(ctx, rd, W, H, u, ext, forceSide) {
     if (!rd.length) return null;
-    const sc = this.k * this.vw.z, v = this.vw, fit = Math.min(1.15, Math.max(0.6, Math.min(this.cv.width, this.cv.height) / this.dpr / 640));
-    const c = (this.dpr / sc) * fit; // c: video units per screen pixel (scaled a little with the pane), so boxes stay the same size at any zoom or video size
+    const sc = this.k * this.vw.z, v = this.vw;
     const x0 = Math.max(0, -v.tx / sc), x1 = Math.min(W, (this.cv.width - v.tx) / sc), y0 = Math.max(0, -v.ty / sc), y1 = Math.min(H, (this.cv.height - v.ty) / sc);
+    // Screen-space sizing: the boxes keep one size on screen while you zoom in, and shrink with the picture when the whole clip gets small (zoomed out).
+    const visW = (x1 - x0) * sc / this.dpr, visH = (y1 - y0) * sc / this.dpr, fit = Math.min(1, Math.max(0.4, Math.min(visW / 900, visH / 650)));
+    const c = (this.dpr / sc) * fit * 0.7; // c: video units per screen pixel (30% smaller than before)
     const left = forceSide ? forceSide === 'left' : rd.reduce((s, r) => s + r.ax, 0) / rd.length < (x0 + x1) / 2; // left player reads on the left, right player on the right
     const fl = 14 * c, fv = 24 * c, h = 44 * c, gap = 18 * c, m = 16 * c;
     const lab = `600 ${Math.round(fl * 100) / 100}px 'Barlow', system-ui, sans-serif`, val = `700 ${Math.round(fv * 100) / 100}px 'JetBrains Mono', ui-monospace, monospace`;
@@ -569,11 +571,12 @@ export class Pane {
     items.forEach((it, i) => { it.y = Math.max(it.y, y0 + m + h / 2); if (i && it.y < items[i - 1].y + h + gap) it.y = items[i - 1].y + h + gap; });
     for (const it of items) {
       // halfway between the edge of the picture and the player's nearest marked point, never touching the player
-      const bx = left ? Math.max(x0 + m, Math.min(x0 + m + (ext[0] - (x0 + m)) * 0.5, ext[0] - 24 * c - it.w)) : Math.min(x1 - m - it.w, Math.max(x1 - m - it.w - ((x1 - m) - ext[1]) * 0.5, ext[1] + 24 * c));
+      const t = 0.5 + 0.5 * Math.min(1, Math.max(0, (this.vw.z - 1) / 1.5)); // 0.5 = halfway, 1 = against the edge of what you can see (zoomed in)
+      const bx = left ? Math.max(x0 + m, Math.min(x0 + m + (ext[0] - (x0 + m)) * (1 - t), ext[0] - 24 * c - it.w)) : Math.min(x1 - m - it.w, Math.max(x1 - m - it.w - ((x1 - m) - ext[1]) * (1 - t), ext[1] + 24 * c));
       const ex = left ? bx + it.w : bx;
-      ctx.strokeStyle = it.color; ctx.lineWidth = 3 * c; ctx.globalAlpha = 0.95;
+      ctx.strokeStyle = it.color; ctx.lineWidth = 2.5 * c; ctx.globalAlpha = 0.95;
       ctx.beginPath(); ctx.moveTo(ex, it.y); ctx.lineTo(it.ax, it.ay); ctx.stroke();
-      ctx.beginPath(); ctx.arc(it.ax, it.ay, 6 * c, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill(); ctx.lineWidth = 2 * c; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(it.ax, it.ay, 2.5 * c, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill(); ctx.lineWidth = 1.5 * c; ctx.strokeStyle = '#fff'; ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.fillStyle = 'rgba(0,0,0,.85)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, it.y - h / 2, it.w, h, 9 * c) : ctx.rect(bx, it.y - h / 2, it.w, h); ctx.fill();
       ctx.lineWidth = 3 * c; ctx.strokeStyle = it.color; ctx.stroke();
@@ -624,14 +627,14 @@ export class Pane {
       if (noH) px.length = 3;
       const nseg = def.chain ? px.length - 1 : Math.min(1, px.length - 1);
       for (let i = 0; i < nseg; i++) {
-        ctx.strokeStyle = def.segColors ? def.segColors[i] : def.color; ctx.lineWidth = (live ? 7 : 6) * c;
+        ctx.strokeStyle = def.segColors ? def.segColors[i] : def.color; ctx.lineWidth = (live ? 5.25 : 4.5) * c;
         ctx.beginPath(); ctx.moveTo(px[i][0], px[i][1]); ctx.lineTo(px[i + 1][0], px[i + 1][1]); ctx.stroke();
       }
       px.forEach(([x, y], i) => {
         const col = def.segColors ? def.segColors[Math.max(0, i - 1)] : def.color;
-        ctx.beginPath(); ctx.arc(x, y, (cur && cur.key ? 10 : 8) * c * (live ? 1.15 : 1), 0, Math.PI * 2);
-        if (cur && cur.key) { ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 3 * c; ctx.strokeStyle = '#fff'; ctx.stroke(); }
-        else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 3.5 * c; ctx.strokeStyle = col; ctx.stroke(); }
+        ctx.beginPath(); ctx.arc(x, y, (cur && cur.key ? 3.5 : 3) * c * (live ? 1.15 : 1), 0, Math.PI * 2);
+        if (cur && cur.key) { ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 1.8 * c; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+        else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 2 * c; ctx.strokeStyle = col; ctx.stroke(); }
       });
       if (live && cur) {
         const g = this.handleGeom(k, P, u), dr = this.pdrag && this.pdrag.key === k && this.pdrag.mode === 'rot' ? this.pdrag.delta : 0;
