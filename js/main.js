@@ -502,7 +502,7 @@ let thrCount = 0;
 function updatePtUI() {
   const p = act(), f0 = Math.round(p.f);
   $('#ptPane').textContent = p.id;
-  $('#ptSlotLbl').textContent = `Player ${p.slot.player} · Throw ${p.slot.throw}`;
+  $('#ptSlotLbl').textContent = `P${p.slot.player} · T${p.slot.throw}`;
   $$('#ptPlayer button').forEach((b) => { b.setAttribute('aria-pressed', String(+b.dataset.p === p.slot.player)); b.classList.toggle('has', [...Array(p.nThrows)].some((_, i) => p.slotHas(+b.dataset.p, i + 1))); });
   const tb = $('#ptThrow');
   if (thrCount !== p.nThrows) { thrCount = p.nThrows; tb.innerHTML = ''; for (let i = 1; i <= thrCount; i++) { const b = document.createElement('button'); b.dataset.t = i; b.textContent = i; tb.appendChild(b); } }
@@ -510,7 +510,8 @@ function updatePtUI() {
   // player box button: red / blue, on or off at this frame
   const pl = p.slot.player, bon = !!p.media && p.pboxVisible(pl, f0);
   const bt = $('#boxToggle'); bt.style.setProperty('--pc', PLAYER_COLORS[pl]); bt.setAttribute('aria-pressed', String(bon)); bt.textContent = bon ? '✓ Box on' : 'Show box';
-  $('#boxInfo').textContent = p.pbox[pl].rect ? `Player ${pl} box: ${p.pboxText(pl)}. It turns on or off from the frame you press Show box on.` : `No box for Player ${pl} yet. Press Draw (F) and drag around the player.`;
+  const help = $('#ptSec').classList.contains('show-help');
+  $('#boxInfo').textContent = p.pbox[pl].rect ? `Player ${pl} box: ${p.pboxText(pl)}.${help ? ' It turns on or off from the frame you press Show box on.' : ''}` : `No box for Player ${pl} yet.${help ? ' Press Draw (F) and drag around the player.' : ''}`;
   $('#boxClear').disabled = !p.pbox[pl].rect;
   const nt = $('#ptNote'); if (document.activeElement !== nt && nt.value !== p.note) nt.value = p.note;
   POINT_SET_ORDER.forEach((k) => {
@@ -523,10 +524,12 @@ function updatePtUI() {
   $$('#ptTrans button').forEach((b) => (b.disabled = !on));
   $('#ptPlayIcon').innerHTML = state.playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
   $('#ptPlay').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
-  $('#ptFrame').textContent = !p.media ? 'No clip' : `Frame ${f + 1} / ${p.N} · ${(f / p.fps).toFixed(3)} s${mo && f >= mo.start && f <= mo.end ? ' · in the motion' : ''}`;
+  $('#ptFrame').textContent = !p.media ? 'No clip' : `Frame ${f + 1} / ${p.N} · ${(f / p.fps).toFixed(3)} s${mo && f >= mo.start && f <= mo.end ? ' · in motion' : ''}`;
   $('#ptUndo').disabled = !p.ptHist.length;
+  ['#ptDone', '#ptClear', '#ptRotate'].forEach((s) => ($(s).disabled = !state.pset));
+  const nk = p.allKeys().length;
   $('#ptSummary').textContent = !mo ? 'Nothing labeled on this throw yet.'
-    : `Motion: frame ${fr1(mo.start)} → ${fr1(mo.end)}${mo.open ? ' (not finished: press Finish on the last frame)' : ''}\n${mo.end - mo.start + 1} frames · ${((mo.end - mo.start + 1) / p.fps).toFixed(2)} s · ${p.allKeys().length} keyframe${p.allKeys().length === 1 ? '' : 's'}`;
+    : `Motion ${fr1(mo.start)}→${fr1(mo.end)} · ${mo.end - mo.start + 1} frames · ${((mo.end - mo.start + 1) / p.fps).toFixed(2)} s · ${nk} key${nk === 1 ? '' : 's'}${mo.open ? ' · not finished' : ''}`;
   const key = state.pset, panel = $('#ptPanel');
   panel.hidden = !key;
   if (!key) return;
@@ -538,6 +541,7 @@ function updatePtUI() {
   else if (s && s.end !== null) hint = `${def.label} is finished. Press Edit to change it.`;
   else { const i = p.ptNextIndex(key, f); hint = `Click the ${def.names.slice(i).join(', then the ')} on the video.${key === 'arm' && i === 1 ? ' The shoulder comes from your Shoulders points.' : ''}`; }
   $('#ptHint').textContent = hint;
+  $('#ptHint').classList.toggle('helptext', !!cur); // the long how-to line hides unless help is on; the 'click the next point' prompt stays
   $('#ptRotate').setAttribute('aria-pressed', String(state.prot));
   $$('#ptScope button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.s === 'all') === state.pwhole)));
   $('#ptDone').textContent = s && s.end !== null ? 'Edit' : '✓ Finish';
@@ -546,6 +550,15 @@ function updatePtUI() {
   if (key === 'arm' && cur) read = [['arm', 'Upper arm'], ['forearm', 'Forearm'], ['elbow', 'Elbow'], ['wristBend', 'Wrist']].map(([m, l]) => { const v = p.metric(m); return v === null ? null : `${l} ${METRIC_DEFS[m].fmt(v)}`; }).filter(Boolean).join(' · ');
   $('#ptRead').hidden = !read; $('#ptRead').textContent = read;
 }
+// "?" shows or hides the instruction text in the Point labeler (remembered)
+const HELP_KEY = 'tl.ptHelp';
+function setHelp(on) {
+  $('#ptSec').classList.toggle('show-help', on); $('#ptHelp').setAttribute('aria-pressed', String(on));
+  try { localStorage.setItem(HELP_KEY, on ? '1' : '0'); } catch (_) { /* ignore */ }
+  updatePtUI();
+}
+try { $('#ptSec').classList.toggle('show-help', localStorage.getItem(HELP_KEY) === '1'); $('#ptHelp').setAttribute('aria-pressed', String(localStorage.getItem(HELP_KEY) === '1')); } catch (_) { /* ignore */ }
+$('#ptHelp').onclick = () => setHelp(!$('#ptSec').classList.contains('show-help'));
 // Move / rotate options
 $('#ptRotate').onclick = () => { state.prot = !state.prot; syncUI(); dirty = true; };
 $$('#ptScope button').forEach((b) => (b.onclick = () => { state.pwhole = b.dataset.s === 'all'; syncUI(); dirty = true; }));

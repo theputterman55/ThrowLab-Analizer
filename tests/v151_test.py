@@ -37,7 +37,7 @@ def main():
                 check("still an arrow when zoomed", cur() == "default", cur())
                 pg.click("#ptSets .ptset[aria-pressed=true]")  # leave the labeler
                 pg.keyboard.press("v"); pg.wait_for_timeout(150)
-                check("cursor tool keeps the pan hand when zoomed", cur() == "grab", cur())
+                check("cursor tool shows the arrow too when zoomed (no hand)", cur() == "default", cur())
             check(f"[{q or 'default'}] no page errors", not errs, errs)
         b.close()
     print("ALL PASSED" if not fails else f"FAILED: {fails}")

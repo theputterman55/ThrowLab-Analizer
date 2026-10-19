@@ -68,7 +68,7 @@ def main():
         pg.click("#ptNextKey"); pg.wait_for_timeout(100); check("Next key", cur() == 3, cur())
         pg.click("#ptPrevKey"); pg.wait_for_timeout(100); check("Prev key", cur() == 0, cur())
         pg.click("#ptEnd"); pg.wait_for_timeout(100); check("End jumps to last labeled frame", cur() == 3, cur())
-        check("summary shows the motion", "Motion: frame 1" in txt("#ptSummary"), txt("#ptSummary"))
+        check("summary shows the motion", "Motion 1" in txt("#ptSummary"), txt("#ptSummary"))
         pg.click("#ptDone"); pg.wait_for_timeout(100)
         check("summary flags the unfinished sets", "not finished" in txt("#ptSummary"), txt("#ptSummary"))
         pg.click("#ptPlay"); pg.wait_for_timeout(200)
@@ -76,7 +76,7 @@ def main():
         pg.click("#ptPlay"); pg.wait_for_timeout(100)
 
         # --- Player / throw slots
-        check("heading shows player and throw", "player 1 · throw 1" in txt("#ptSlotLbl").lower(), txt("#ptSlotLbl"))
+        check("heading shows player and throw", "p1 · t1" in txt("#ptSlotLbl").lower(), txt("#ptSlotLbl"))
         check("measurements heading shows slot", "p1" in txt("#measPane").lower() and "t1" in txt("#measPane").lower(), txt("#measPane"))
         check("four throw buttons", pg.locator("#ptThrow button").count() == 4)
         pg.fill("#ptNote", "Practice, back-of-board"); pg.wait_for_timeout(150)
@@ -84,7 +84,7 @@ def main():
         pg.click("#ptThrow button[data-t='2']"); pg.wait_for_timeout(150)
         check("throw 2 starts empty", ev(f"Object.keys({P}.pts).length") == 0)
         check("note is per throw", pg.input_value("#ptNote") == "", pg.input_value("#ptNote"))
-        check("heading follows", "throw 2" in txt("#ptSlotLbl").lower() and "t2" in txt("#measPane").lower())
+        check("heading follows", "t2" in txt("#ptSlotLbl").lower() and "t2" in txt("#measPane").lower())
         pg.click(".ptset[data-set=hips]"); click(.40,.60); click(.55,.62)
         check("hips placed on throw 2", ev(f"Object.keys({P}.pts)") == ["hips"], ev(f"Object.keys({P}.pts)"))
         pg.click("#ptPlayer button[data-p='2']"); pg.wait_for_timeout(150)
@@ -94,7 +94,7 @@ def main():
         check("note kept for throw 1", pg.input_value("#ptNote") == "Practice, back-of-board", pg.input_value("#ptNote"))
         check("throw buttons mark used throws", pg.locator("#ptThrow button.has").count() == 2, pg.locator("#ptThrow button.has").count())
         pg.click("#ptThrowAdd"); pg.wait_for_timeout(150)
-        check("throw 5 added", pg.locator("#ptThrow button").count() == 5 and "throw 5" in txt("#ptSlotLbl").lower())
+        check("throw 5 added", pg.locator("#ptThrow button").count() == 5 and "t5" in txt("#ptSlotLbl").lower())
         pg.click("#ptThrow button[data-t='2']"); pg.wait_for_timeout(150)
 
         # --- keyframe ticks still visible (trkonly regression)

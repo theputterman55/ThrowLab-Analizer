@@ -424,7 +424,7 @@ export class Pane {
     const piv = (orig[f] || Object.values(orig)[0]).pivot;
     this.pdrag = { key, mode, f, q0: q, orig, a0: Math.atan2((q[1] - piv[1]) * H, (q[0] - piv[0]) * W), delta: 0 };
     try { this.cv.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-    this.cv.style.cursor = mode === 'rot' ? 'grabbing' : 'move';
+    this.cv.style.cursor = mode === 'rot' ? 'crosshair' : 'move';
     this.ptChanged();
   }
   applyXform(e) {
@@ -740,7 +740,7 @@ export class Pane {
       return;
     }
     const st = this.app.state;
-    if (st.pset && !this.draft) { const h = this.hitHandle(e, st.pset, Math.round(this.f)); this.cv.style.cursor = h === 'move' ? 'move' : h === 'rot' ? 'grab' : ''; }
+    if (st.pset && !this.draft) { const h = this.hitHandle(e, st.pset, Math.round(this.f)); this.cv.style.cursor = h === 'move' ? 'move' : h === 'rot' ? 'crosshair' : ''; }
     if (!this.draft) return;
     const q = this.pt(e);
     this.draft.live = q;

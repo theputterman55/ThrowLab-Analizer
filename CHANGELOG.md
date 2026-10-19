@@ -8,6 +8,12 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.8.1
+- Compact Point labeler: the instruction text is hidden. A small **?** button by the heading shows it again (and remembers your choice). The prompt that tells you which point to click next stays visible.
+- Undo, Finish, Clear set and Rotate now sit in one row right under the Shoulders / Hips / Arm buttons, always on screen. Finish, Clear set and Rotate are greyed out when no set is active.
+- Player 1/2 buttons read P1 / P2 and share a line with Show box, Draw and the clear button. The heading reads "P1 · T1". The frame and motion summary are two short lines.
+- The pointer is the arrow everywhere, including the Cursor tool when zoomed in. The hand shows only while you are actually panning. Over the center dot the pointer is the move cursor, and over the rotate pin it is a crosshair.
+
 ## 1.8.0
 - Move a whole line: while a point set is active, a small hollow dot sits at the center of its line. Drag it to slide the whole line. Dragging an endpoint still moves just that point.
 - Rotate: the **Rotate (S)** button, or the **S** key while a point set is active, shows a pin that drops from the center dot. Drag the pin's round handle to turn the line about its center, with the angle shown while you drag. Press S again to hide it. With no set active, S is still the Square tool.
