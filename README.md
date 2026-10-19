@@ -83,3 +83,10 @@ Do not commit throw footage or photos of people to this repo. Video files are ig
 ## Credits
 
 Body tracking uses Google MediaPipe, licensed under Apache-2.0. See `NOTICE.md`.
+
+## Zoom and pan
+
+- Pinch on a trackpad (or scroll the mouse wheel) over a clip to zoom toward the pointer. Up to 16x.
+- The corner control has a magnifier (zoom window), minus, slider, plus, Fit and Hold. Keys: + - 0.
+- Pan by dragging with the Cursor tool, Alt or Shift + drag with any tool, or middle/right-button drag.
+- Hold locks the zoom and position so nothing moves it while you draw or step frames.

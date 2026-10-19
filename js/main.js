@@ -46,7 +46,8 @@ const app = {
   stageEl: $('#stage'),
   compareEl: $('#compare'),
   requestRender: () => { dirty = true; },
-  setActive, onPaneChange, onMediaLoaded, toast
+  setActive, onPaneChange, onMediaLoaded, toast,
+  setTool: (id) => setTool(id)
 };
 const panes = ['A', 'B'].map((id) => new Pane(id, app));
 const act = () => panes.find((p) => p.id === state.active) || panes[0];
@@ -387,6 +388,9 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Home') goTo('first');
   else if (e.key === 'End') goTo('last');
   else if (e.key === 'Enter') panes.forEach((p) => p.finishPath());
+  else if (e.key === '+' || e.key === '=') act().zoomCenter(act().vw.z * 1.5);
+  else if (e.key === '-' || e.key === '_') act().zoomCenter(act().vw.z / 1.5);
+  else if (e.key === '0') act().fit();
   else if (keys[k]) setTool(keys[k]);
 });
 

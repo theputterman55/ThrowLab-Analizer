@@ -46,6 +46,8 @@ export class Pane {
     this.rel = null; this.roi = null; this.lens = null;
     this.raw = null; this.smoothed = null; this.poseInfo = null;
     this.analyzing = false; this.seeking = false;
+    // View (zoom/pan) in canvas pixels: screen = point * z + (tx, ty). hold locks it.
+    this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null;
     this.tmp = document.createElement('canvas');
     this.build();
   }
@@ -57,6 +59,15 @@ export class Pane {
       <button class="btn sm" data-act="rel" title="Mark the release at the current frame">Mark release</button>
       <label class="btn sm" title="Open a video or photo">Open clip<input type="file" accept="video/*,image/*" hidden></label></header>
       <div class="view"><canvas width="1280" height="720" aria-label="Clip ${this.id}"></canvas><div class="tc"></div>
+      <div class="zoomctl" role="group" aria-label="Zoom" hidden>
+        <button type="button" data-z="lens" title="Zoom window: drag a box to magnify it in a corner window (Z)" aria-label="Zoom window"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="M15 15l5 5M10 7v6M7 10h6"/></svg></button>
+        <button type="button" data-z="out" title="Zoom out (-)" aria-label="Zoom out">&minus;</button>
+        <input type="range" min="0" max="100" step="1" value="0" aria-label="Zoom level">
+        <button type="button" data-z="in" title="Zoom in (+)" aria-label="Zoom in">+</button>
+        <span class="zread">100%</span>
+        <button type="button" data-z="fit" title="Fit to pane (0 or double-click)">Fit</button>
+        <button type="button" data-z="hold" aria-pressed="false" title="Hold: lock the zoom and position so nothing moves it">Hold</button>
+      </div>
       <div class="empty"><strong>Open a clip</strong><span>Choose a video or photo, or drop one here.</span></div></div>`;
     this.app.stageEl.insertBefore(el, this.app.compareEl);
     this.el = el;
@@ -67,7 +78,31 @@ export class Pane {
     this.cv.addEventListener('pointerdown', (e) => this.onDown(e));
     this.cv.addEventListener('pointermove', (e) => this.onMove(e));
     this.cv.addEventListener('pointerup', (e) => this.onUp(e));
-    this.cv.addEventListener('pointercancel', () => { this.draft = null; this.app.requestRender(); });
+    this.cv.addEventListener('pointercancel', () => { this.draft = null; this.endPan(); this.app.requestRender(); });
+    this.cv.addEventListener('contextmenu', (e) => { if (this.media) e.preventDefault(); });
+    this.cv.addEventListener('dblclick', () => { if (this.media && this.app.state.tool === 'cursor') this.fit(); });
+    // Pinch on a trackpad arrives as Ctrl+wheel; a mouse wheel zooms too. Both zoom toward the pointer.
+    this.view.addEventListener('wheel', (e) => {
+      if (!this.media) return;
+      if (this.vw.hold) { if (e.ctrlKey) e.preventDefault(); return; }
+      e.preventDefault();
+      let dy = e.deltaY; if (e.deltaMode === 1) dy *= 16;
+      const [cx, cy] = this.canvasXY(e);
+      this.zoomAt(cx, cy, this.vw.z * Math.exp(-dy * (e.ctrlKey ? 0.012 : 0.0025)));
+    }, { passive: false });
+    this.zc = el.querySelector('.zoomctl');
+    this.zSlider = this.zc.querySelector('input'); this.zRead = this.zc.querySelector('.zread');
+    this.zc.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.zc.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      const a = b.dataset.z;
+      if (a === 'lens') this.app.setTool('lens');
+      else if (a === 'in') this.zoomCenter(this.vw.z * 1.5);
+      else if (a === 'out') this.zoomCenter(this.vw.z / 1.5);
+      else if (a === 'fit') this.fit();
+      else if (a === 'hold') this.setHold(!this.vw.hold);
+    });
+    this.zSlider.addEventListener('input', () => this.zoomCenter(Math.pow(2, this.zSlider.value / 25)));
     el.querySelector('[data-act=rel]').onclick = () => { this.rel = Math.round(this.f); this.app.onPaneChange(this); };
     el.querySelector('input[type=file]').onchange = (e) => { const f = e.target.files[0]; if (f) this.loadFile(f); e.target.value = ''; };
     this.view.addEventListener('dragover', (e) => { e.preventDefault(); this.view.classList.add('drop'); });
@@ -113,7 +148,7 @@ export class Pane {
       }
     } catch (err) {
       this.release(); this.media = null; this.N = 0;
-      this.nameEl.textContent = 'No clip loaded'; this.metaEl.textContent = '';
+      this.nameEl.textContent = 'No clip loaded'; this.metaEl.textContent = ''; this.syncZoom();
       this.app.toast(err.message || 'Could not open that file.');
       this.app.onPaneChange(this);
       return;
@@ -122,6 +157,7 @@ export class Pane {
     this.cv.width = Math.round(this.media.w * s); this.cv.height = Math.round(this.media.h * s);
     this.f = 0; this.ann = []; this.hist = []; this.rel = null; this.roi = null; this.lens = null;
     this.raw = null; this.smoothed = null; this.poseInfo = null; this.draft = null; this.pathAnn = null;
+    this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null; this.syncZoom();
     this.emptyEl.hidden = true;
     this.updateMeta();
     if (this.media.type === 'video') await this.seekTo(0);
@@ -192,9 +228,48 @@ export class Pane {
   clearAnn() { if (this.ann.length) { this.snap(); this.ann = []; this.pathAnn = null; this.app.requestRender(); this.app.onPaneChange(this, true); } }
   finishPath() { this.pathAnn = null; }
 
-  pt(e) {
+  // ---------- zoom / pan ----------
+  canvasXY(e) {
     const r = this.cv.getBoundingClientRect();
-    return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
+    return [((e.clientX - r.left) / r.width) * this.cv.width, ((e.clientY - r.top) / r.height) * this.cv.height];
+  }
+  clampView() {
+    const v = this.vw, W = this.cv.width, H = this.cv.height;
+    v.z = Math.min(16, Math.max(1, v.z));
+    v.tx = Math.min(0, Math.max(W * (1 - v.z), v.tx));
+    v.ty = Math.min(0, Math.max(H * (1 - v.z), v.ty));
+  }
+  zoomAt(cx, cy, nz) {
+    if (!this.media || this.vw.hold) return;
+    const v = this.vw, z0 = v.z;
+    v.z = nz; this.clampView();
+    const k = v.z / z0;
+    v.tx = cx - (cx - v.tx) * k; v.ty = cy - (cy - v.ty) * k;
+    this.clampView(); this.syncZoom(); this.app.requestRender();
+  }
+  zoomCenter(nz) { this.zoomAt(this.cv.width / 2, this.cv.height / 2, nz); }
+  fit() {
+    if (!this.media || this.vw.hold) return;
+    Object.assign(this.vw, { z: 1, tx: 0, ty: 0 }); this.syncZoom(); this.app.requestRender();
+  }
+  setHold(on) { this.vw.hold = !!on; this.syncZoom(); }
+  endPan() { if (this.pan) { this.pan = null; this.cv.style.cursor = ''; } }
+  syncZoom() {
+    if (!this.zc) return;
+    const v = this.vw;
+    this.zc.hidden = !this.media;
+    this.zRead.textContent = Math.round(v.z * 100) + '%';
+    this.zSlider.value = String(Math.round(25 * Math.log2(v.z)));
+    this.zc.querySelector('[data-z=hold]').setAttribute('aria-pressed', String(v.hold));
+    this.zc.classList.toggle('held', v.hold);
+    for (const c of this.zc.querySelectorAll('[data-z=in],[data-z=out],[data-z=fit],input')) c.disabled = v.hold;
+    this.view.classList.toggle('zoomed', v.z > 1.001);
+  }
+
+  pt(e) {
+    const [cx, cy] = this.canvasXY(e), v = this.vw;
+    const c = (n) => Math.min(1, Math.max(0, n));
+    return [c((cx - v.tx) / v.z / this.cv.width), c((cy - v.ty) / v.z / this.cv.height)];
   }
 
   commit(d) {
@@ -218,7 +293,7 @@ export class Pane {
 
   eraseAt(q) {
     const W = this.cv.width, H = this.cv.height, x = q[0] * W, y = q[1] * H, f = Math.round(this.f);
-    let best = -1, bd = 30 * (W / 1280);
+    let best = -1, bd = (30 * (W / 1280)) / this.vw.z;
     this.ann.forEach((a, i) => {
       if (a.frame !== null && a.frame !== f) return;
       const d = annDist(a, x, y, W, H);
@@ -229,7 +304,17 @@ export class Pane {
 
   onDown(e) {
     const st = this.app.state, t = st.tool;
-    if (!this.media || t === 'cursor' || e.button > 0) return;
+    if (!this.media) return;
+    // Pan: middle or right button, Alt/Shift+drag, or any drag with the cursor tool. Only when zoomed in and not on hold.
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && (e.altKey || e.shiftKey || t === 'cursor'))) {
+      e.preventDefault();
+      if (this.vw.hold || this.vw.z <= 1.001) return;
+      this.pan = { x: e.clientX, y: e.clientY };
+      try { this.cv.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      this.cv.style.cursor = 'grabbing';
+      return;
+    }
+    if (t === 'cursor' || e.button > 0) return;
     e.preventDefault();
     const q = this.pt(e);
     if (t === 'eraser') { this.eraseAt(q); return; }
@@ -262,6 +347,14 @@ export class Pane {
   }
 
   onMove(e) {
+    if (this.pan) {
+      const r = this.cv.getBoundingClientRect(), v = this.vw;
+      v.tx += ((e.clientX - this.pan.x) / r.width) * this.cv.width;
+      v.ty += ((e.clientY - this.pan.y) / r.height) * this.cv.height;
+      this.pan.x = e.clientX; this.pan.y = e.clientY;
+      this.clampView(); this.app.requestRender();
+      return;
+    }
     if (!this.draft) return;
     const q = this.pt(e);
     this.draft.live = q;
@@ -270,6 +363,7 @@ export class Pane {
   }
 
   onUp(e) {
+    if (this.pan) { this.endPan(); return; }
     const d = this.draft;
     if (!d || !d.drag) return;
     const q = this.pt(e);
@@ -277,24 +371,28 @@ export class Pane {
     if (d.type === 'pen') { if (d.pts.length > 2) this.commit(d); }
     else {
       d.pts.push(q);
-      if (Math.hypot((q[0] - d.pts[0][0]) * this.cv.width, (q[1] - d.pts[0][1]) * this.cv.height) > 8) this.commit(d);
+      if (Math.hypot((q[0] - d.pts[0][0]) * this.cv.width, (q[1] - d.pts[0][1]) * this.cv.height) * this.vw.z > 8) this.commit(d);
     }
     this.app.requestRender();
   }
 
   // ---------- rendering ----------
   render() {
-    const { ctx, cv } = this, st = this.app.state, W = cv.width, H = cv.height, u = W / 1280;
+    const { ctx, cv } = this, st = this.app.state, W = cv.width, H = cv.height, v = this.vw, z = v.z, u = W / 1280 / z;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#0a0e0d'; ctx.fillRect(0, 0, W, H);
     if (!this.media) { this.tc.textContent = ''; return; }
     const f = Math.round(this.f);
     if (this.media.type === 'video' && !this.analyzing) this.ensureSeek();
+    // Everything below is drawn in video coordinates under the zoom/pan transform.
+    ctx.setTransform(z, 0, 0, z, v.tx, v.ty);
     ctx.drawImage(this.media.el, 0, 0, W, H);
     this.drawBody(ctx, W, H, f, st);
-    for (const a of this.ann) if (a.frame === null || a.frame === f) drawAnn(ctx, a, W, H, f);
+    for (const a of this.ann) if (a.frame === null || a.frame === f) drawAnn(ctx, a, W, H, f, z);
     if (this.draft) this.drawDraft(ctx, W, H, f, st);
     if (this.roi && st.layers.roi) this.drawBox(ctx, this.roi, W, H, u, 'Player', AMBER);
     if (this.lens && st.layers.lens) this.drawLens(ctx, W, H, u);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.tc.textContent = this.media.type === 'image' ? 'Photo' : `F ${f + 1} / ${this.N} · ${(f / this.fps).toFixed(3)} s`;
   }
 
@@ -302,14 +400,14 @@ export class Pane {
     const d = this.draft;
     if (d.type === 'roi' || d.type === 'lens') {
       const a = d.pts[0], b = d.live;
-      this.drawBox(ctx, { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) }, W, H, W / 1280, d.type === 'roi' ? 'Player' : 'Zoom', d.type === 'roi' ? AMBER : '#fff');
+      this.drawBox(ctx, { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) }, W, H, W / 1280 / this.vw.z, d.type === 'roi' ? 'Player' : 'Zoom', d.type === 'roi' ? AMBER : '#fff');
       return;
     }
     let pts;
     if (d.type === 'angle' || d.type === 'board') pts = [...d.pts, d.live];
     else if (d.type === 'pen') pts = d.pts;
     else pts = [d.pts[0], d.live];
-    drawAnn(ctx, { type: d.type, pts, color: st.color, w: st.w, frame: null }, W, H, f);
+    drawAnn(ctx, { type: d.type, pts, color: st.color, w: st.w, frame: null }, W, H, f, this.vw.z);
   }
 
   drawBox(ctx, r, W, H, u, label, color) {
@@ -325,16 +423,22 @@ export class Pane {
   }
 
   drawLens(ctx, W, H, u) {
-    const L = this.lens, sx = L.x * W, sy = L.y * H, sw = L.w * W, sh = L.h * H;
-    let iw = W * 0.36, ih = (iw * sh) / sw;
-    if (ih > H * 0.6) { ih = H * 0.6; iw = (ih * sw) / sh; }
-    const ix = W - iw - 16 * u, iy = H - ih - 16 * u;
-    this.tmp.width = Math.round(iw); this.tmp.height = Math.round(ih);
-    this.tmp.getContext('2d').drawImage(this.cv, sx, sy, sw, sh, 0, 0, this.tmp.width, this.tmp.height);
+    const L = this.lens, v = this.vw, sx = L.x * W, sy = L.y * H, sw = L.w * W, sh = L.h * H;
     ctx.save();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * u; ctx.strokeRect(sx, sy, sw, sh);
-    ctx.drawImage(this.tmp, ix, iy);
-    ctx.lineWidth = 3 * u; ctx.strokeRect(ix, iy, iw, ih);
+    // The corner window is drawn in screen space, copying what is currently visible inside the box.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const u0 = W / 1280;
+    const mx = sx * v.z + v.tx, my = sy * v.z + v.ty, mw = sw * v.z, mh = sh * v.z;
+    let iw = W * 0.36, ih = (iw * sh) / sw;
+    if (ih > H * 0.6) { ih = H * 0.6; iw = (ih * sw) / sh; }
+    const ix = W - iw - 16 * u0, iy = H - ih - 16 * u0;
+    if (mw > 1 && mh > 1 && mx < W && my < H && mx + mw > 0 && my + mh > 0) {
+      this.tmp.width = Math.max(1, Math.round(iw)); this.tmp.height = Math.max(1, Math.round(ih));
+      this.tmp.getContext('2d').drawImage(this.cv, mx, my, mw, mh, 0, 0, this.tmp.width, this.tmp.height);
+      ctx.drawImage(this.tmp, ix, iy);
+      ctx.lineWidth = 3 * u0; ctx.strokeRect(ix, iy, iw, ih);
+    }
     ctx.restore();
   }
 
@@ -342,7 +446,7 @@ export class Pane {
     const L = st.layers;
     const fr = this.poseFrame(f);
     if (!fr) return;
-    const hand = st.hand, u = W / 1280;
+    const hand = st.hand, u = W / 1280 / this.vw.z;
     const col = COL[this.id];
     const P = (i) => [fr[i * 3] * W, fr[i * 3 + 1] * H, fr[i * 3 + 2]];
     if (L.trail) {

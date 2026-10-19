@@ -15,7 +15,7 @@ export const TOOL_DEFS = {
   level:  { label: 'Level line', key: 'H', hint: 'Click to drop a horizontal line.', svg: '<path d="M3 12h18"/><path d="M16 8l5 4-5 4"/>' },
   path:   { label: 'Path tracer', key: 'T', hint: 'Click the bag or hand on each frame. The dots join into a path. Press Enter to finish.', svg: '<circle cx="5" cy="18" r="1.6"/><circle cx="10" cy="9" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="20" cy="12" r="1.6"/><path d="M5 18L10 9L16 6L20 12" stroke-dasharray="2 2"/>' },
   board:  { label: 'Board outline', key: 'B', hint: 'Click the 4 board corners: near left, near right, far right, far left.', svg: '<path d="M7 5h10l3 14H4z"/><path d="M12 5v14" stroke-dasharray="2 2"/>' },
-  lens:   { label: 'Zoom window', key: 'Z', hint: 'Drag a box over the thrower to magnify them in a corner window.', svg: '<circle cx="10" cy="10" r="6"/><path d="M15 15l5 5M10 7v6M7 10h6"/>' },
+  lens:   { label: 'Zoom window', key: 'Z', hint: 'Drag a box over the thrower to magnify them in a corner window. To zoom the whole picture, pinch or scroll over it.', svg: '<circle cx="10" cy="10" r="6"/><path d="M15 15l5 5M10 7v6M7 10h6"/>' },
   roi:    { label: 'Follow player', key: 'F', hint: 'Drag a box around the thrower so the body tracker follows only them.', svg: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="9" r="2"/><path d="M12 11v5M9 13h6"/>' }
 };
 

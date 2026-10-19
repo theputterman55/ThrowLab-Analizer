@@ -54,8 +54,9 @@ export function boardAxis(P, H) {
   return [at(H), at(0)];
 }
 
-export function drawAnn(ctx, a, W, H, curFrame) {
-  const u = W / 1280;
+// zoom: current view zoom. Strokes and labels are divided by it so they keep the same size on screen.
+export function drawAnn(ctx, a, W, H, curFrame, zoom = 1) {
+  const u = W / 1280 / zoom;
   const P = a.pts.map((q) => [q[0] * W, q[1] * H, q[2]]);
   if (!P.length) return;
   ctx.save();
