@@ -393,6 +393,15 @@ export class Pane {
     this.pts[key].noHand = true; this.ptDraft = null; this.ptChanged();
     return true;
   }
+  // A keyframe of the Shoulders set on frame f to edit. Outside the set's range a keyframe is added from the nearest one and the range is stretched to include f.
+  touchShoulder(f) {
+    const s = this.pts.shoulders; if (!s) return null;
+    if (this.setPoints('shoulders', f)) return this.ensureKey('shoulders', f);
+    const ks = this.keyFrames('shoulders'); if (!ks.length) return null;
+    s.kf[f] = s.kf[f < ks[0] ? ks[0] : ks[ks.length - 1]].map((q) => [q[0], q[1]]);
+    if (s.end !== null && f > s.end) s.end = f;
+    return s.kf[f];
+  }
   // Which point of a set the next click places on frame f.
   ptNextIndex(key, f) {
     if (this.ptDraft && this.ptDraft.key === key && this.ptDraft.f === f) return this.ptDraft.pts.length;
@@ -479,15 +488,16 @@ export class Pane {
       // Grab the nearest dot; a click far from any dot moves the nearest one there.
       const [cx, cy] = this.canvasXY(e), sc = this.k * this.vw.z, v = this.vw;
       let best = 0, bd = 1e9;
-      cur.pts.forEach((p, j) => { if ((cur.linked && j === 0) || (j === 3 && key === 'arm' && this.pts.arm && this.pts.arm.noHand)) return; const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
+      cur.pts.forEach((p, j) => { if (j === 3 && key === 'arm' && this.pts.arm && this.pts.arm.noHand) return; const d = Math.hypot(p[0] * this.vsz.W * sc + v.tx - cx, p[1] * this.vsz.H * sc + v.ty - cy) / this.dpr; if (d < bd) { bd = d; best = j; } });
       let hit = this.hitHandle(e, key, f);
       if (hit === 'move' && bd <= 11) hit = null; // a dot sitting under the center dot wins, so the elbow or wrist can be grabbed
       if (hit) { this.startXform(hit, key, f, q, e); return; }
       this.ptSnap();
-      const kf = this.ensureKey(key, f);
+      const viaSh = key === 'arm' && cur.linked && best === 0; // the arm's shoulder end is the Shoulders dot: dragging it moves that dot, so the two stay connected
+      const kf = viaSh ? this.touchShoulder(f) : this.ensureKey(key, f);
       if (!kf) { this.ptHist.pop(); return; }
       const orig = kf.map((c) => [c[0], c[1]]);
-      this.pdrag = { key, idx: best, f, orig, q0: bd > 30 ? orig[best] : q };
+      this.pdrag = { key: viaSh ? 'shoulders' : key, idx: best, f, orig, q0: bd > 30 ? orig[best] : q };
       if (bd > 30) this.dragDot(q);
       try { this.cv.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       this.ptChanged();
