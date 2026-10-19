@@ -532,15 +532,20 @@ document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault(); }
 for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
 
 /* ---------- keyboard ---------- */
+// After dragging a slider, give the keys back to the video so D / A / arrows keep stepping frames.
+document.addEventListener('pointerup', () => { const a = document.activeElement; if (a && a.tagName === 'INPUT' && a.type === 'range') a.blur(); });
 document.addEventListener('keydown', (e) => {
   const tg = e.target.tagName;
-  if (dlg.open || tg === 'SELECT' || (tg === 'INPUT' && e.target.type !== 'checkbox')) return;
+  const slider = tg === 'INPUT' && e.target.type === 'range'; // a focused slider must not swallow D / A
+  if (dlg.open || tg === 'SELECT' || (tg === 'INPUT' && e.target.type !== 'checkbox' && !slider)) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoAny(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
+  // D = next frame, A = previous frame (Shift = 5), always on. They move the point labeler with them.
+  if (k === 'd') { e.preventDefault(); step(e.shiftKey ? 5 : 1); return; }
+  if (k === 'a') { e.preventDefault(); step(e.shiftKey ? -5 : -1); return; }
+  if (slider && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return; // the slider keeps its own arrow keys
   if (state.pset) {
-    if (k === 'd') { e.preventDefault(); step(1); return; }
-    if (k === 'a') { e.preventDefault(); step(-1); return; }
     if (e.key === 'Enter') { e.preventDefault(); $('#ptDone').click(); return; }
     if (e.key === 'Escape') { setPset(state.pset); return; }
   }

@@ -8,6 +8,11 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.5.2
+- D (next frame) and A (previous frame) always step frames now, with or without a point set active. Shift+D / Shift+A step 5 frames. The point labeler follows each step.
+- The Arrow tool shortcut moves from A to R.
+- A slider you just used no longer swallows D, A and the arrow keys.
+
 ## 1.5.1
 - The pointer is an arrow while you place points with the Point labeler, including when zoomed in. (The pan hand was winning over it.) The Cursor tool still shows the hand when zoomed.
 - The automatic body tracker is hidden: no skeleton, wrist trail, Follow box, tracked bands, Body tracking panel, Follow player tool or "Use tracker's points". Measurements, Layers (zoom window), Key moments, drawing tools and the Point labeler stay. Measurements now come only from the points you place.

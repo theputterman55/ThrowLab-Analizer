@@ -8,7 +8,7 @@ export const CORE_TOOLS = ['cursor', 'line', 'arrow', 'circle', 'rect', 'angle',
 export const TOOL_DEFS = {
   cursor: { label: 'Cursor', key: 'V', hint: 'Click a pane to select it. No drawing.', svg: '<path d="M6 3l13 8-6 2-3 6z"/>' },
   line:   { label: 'Line', key: 'L', hint: 'Drag to draw a line. The label shows its angle from horizontal.', svg: '<path d="M5 19L19 5"/><circle cx="5" cy="19" r="1.6"/><circle cx="19" cy="5" r="1.6"/>' },
-  arrow:  { label: 'Arrow', key: 'A', hint: 'Drag to draw an arrow.', svg: '<path d="M5 19L19 5M10 5h9v9"/>' },
+  arrow:  { label: 'Arrow', key: 'R', hint: 'Drag to draw an arrow.', svg: '<path d="M5 19L19 5M10 5h9v9"/>' },
   circle: { label: 'Circle', key: 'C', hint: 'Drag from the center outward.', svg: '<circle cx="12" cy="12" r="8"/>' },
   rect:   { label: 'Square', key: 'S', hint: 'Drag corner to corner.', svg: '<rect x="5" y="5" width="14" height="14"/>' },
   angle:  { label: 'Angle', key: 'G', hint: 'Click three points: start, corner, end.', svg: '<path d="M4 19h16M4 19L16 7"/><path d="M12 19a8 8 0 0 0 -2.3 -5.7"/>' },
