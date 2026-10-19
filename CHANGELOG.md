@@ -8,6 +8,11 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.8.2
+- Right panel about 25% larger: wider column, bigger text and buttons.
+- Point labeler is now at the top of the panel, with stacked, boxed groups: Point sets (sets stacked, then Undo / Finish / Rotate (S) / Clear set in a 2x2 grid), Step through the clip, Player, Throw.
+- Dimmed text and greyed-out buttons are about 75% less dim.
+
 ## 1.8.1
 - Compact Point labeler: the instruction text is hidden. A small **?** button by the heading shows it again (and remembers your choice). The prompt that tells you which point to click next stays visible.
 - Undo, Finish, Clear set and Rotate now sit in one row right under the Shoulders / Hips / Arm buttons, always on screen. Finish, Clear set and Rotate are greyed out when no set is active.

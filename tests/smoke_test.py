@@ -71,7 +71,7 @@ def main():
         vw = lambda: pg.evaluate("(()=>{const v=window.__throwlab.panes[0].vw;return [v.z,v.tx,v.ty,v.hold]})()")
         check("zoom control visible", pg.is_visible("section.pane[data-id=A] .zoomctl"))
         # point under cursor must stay put when zooming with ctrl+wheel (trackpad pinch)
-        check("fit view is letterboxed inside the window", vw()[1] > 0, vw())
+        check("fit view sits inside the window", vw()[0] == 1 and vw()[1] >= 0 and vw()[2] >= 0, vw())
         cx, cy = pos(.3, .4)
         pg.mouse.move(cx, cy)
         before = pg.evaluate("window.__throwlab.panes[0].pt({clientX:%f,clientY:%f})" % (cx, cy))
