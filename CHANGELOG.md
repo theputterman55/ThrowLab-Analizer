@@ -8,6 +8,9 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.3.1
+- Fix: the main script is now version-stamped too, so an update can never serve an old copy of it.
+
 ## 1.3.0
 - Your work is kept when you refresh or update: clips, drawings, boxes, release marks, body tracking, frame position, layout and hand. Stored in this browser only.
 - New "Saved work" section in the side panel: on/off switch and Clear saved work.
