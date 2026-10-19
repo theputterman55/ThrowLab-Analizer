@@ -37,6 +37,7 @@ async function detectFps(v) {
   });
 }
 
+const PIN_LEN = 110; // length of the rotate pin, in drawing units (scaled so it stays the same size on screen)
 const newPBox = () => ({ 1: { rect: null, spans: [] }, 2: { rect: null, spans: [] } });
 
 export class Pane {
@@ -388,11 +389,71 @@ export class Pane {
     s.kf[f] = cur.pts.map((p) => [p[0], p[1]]);
     return s.kf[f];
   }
+  // ---- move / rotate the whole set (center dot and rotate pin) ----
+  // Video-pixel geometry of the handles: the center dot (moves the line) and the pin that drops from the pivot (rotates it).
+  handleGeom(key, pts, u) {
+    const W = this.vsz.W, H = this.vsz.H, P = pts.map((q) => [q[0] * W, q[1] * H]);
+    let center, pivot;
+    if (key === 'arm') { center = [(P[1][0] + P[2][0] + P[3][0]) / 3, (P[1][1] + P[2][1] + P[3][1]) / 3]; pivot = P[0]; }
+    else { center = [(P[0][0] + P[1][0]) / 2, (P[0][1] + P[1][1]) / 2]; pivot = center; }
+    return { center, pivot, pin: [pivot[0], pivot[1] + PIN_LEN * u] };
+  }
+  hitHandle(e, key, f) {
+    const cur = this.livePts(key, f); if (!cur) return null;
+    const v = this.vw, sc = this.k * v.z, u = this.vsz.W / 1280 / v.z, [cx, cy] = this.canvasXY(e), g = this.handleGeom(key, cur.pts, u);
+    const near = (p, r) => Math.hypot(p[0] * sc + v.tx - cx, p[1] * sc + v.ty - cy) / this.dpr <= r;
+    if (this.app.state.prot && near(g.pin, 15)) return 'rot';
+    return near(g.center, 14) ? 'move' : null;
+  }
+  // Which points slide, which turn, and the pivot (normalized) for one keyframe of a set.
+  dragInfo(key, fr) {
+    const cur = this.livePts(key, fr), P = cur.pts;
+    if (key === 'arm') return { mv: cur.linked ? [1, 2, 3] : [0, 1, 2, 3], rt: [1, 2, 3], pivot: [P[0][0], P[0][1]] };
+    return { mv: [0, 1], rt: [0, 1], pivot: [(P[0][0] + P[1][0]) / 2, (P[0][1] + P[1][1]) / 2] };
+  }
+  startXform(mode, key, f, q, e) {
+    const whole = !!this.app.state.pwhole, s = this.pts[key], W = this.vsz.W, H = this.vsz.H;
+    this.ptSnap();
+    const orig = {};
+    for (const fr of whole ? this.keyFrames(key) : [f]) {
+      const kf = whole ? s.kf[fr] : this.ensureKey(key, fr);
+      if (!kf) continue;
+      orig[fr] = { pts: kf.map((p) => [p[0], p[1]]), ...this.dragInfo(key, fr) };
+    }
+    if (!Object.keys(orig).length) { this.ptHist.pop(); return; }
+    const piv = (orig[f] || Object.values(orig)[0]).pivot;
+    this.pdrag = { key, mode, f, q0: q, orig, a0: Math.atan2((q[1] - piv[1]) * H, (q[0] - piv[0]) * W), delta: 0 };
+    try { this.cv.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    this.cv.style.cursor = mode === 'rot' ? 'grabbing' : 'move';
+    this.ptChanged();
+  }
+  applyXform(e) {
+    const d = this.pdrag, q = this.pt(e), W = this.vsz.W, H = this.vsz.H, s = this.pts[d.key], c01 = (n) => Math.min(1, Math.max(0, n));
+    if (!s) return;
+    const piv = (d.orig[d.f] || Object.values(d.orig)[0]).pivot;
+    if (d.mode === 'rot') { let a = Math.atan2((q[1] - piv[1]) * H, (q[0] - piv[0]) * W) - d.a0; while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; d.delta = a; }
+    const cs = Math.cos(d.delta), sn = Math.sin(d.delta);
+    for (const fr of Object.keys(d.orig)) {
+      const o = d.orig[fr], kf = s.kf[fr]; if (!kf) continue;
+      if (d.mode === 'move') {
+        const dx = q[0] - d.q0[0], dy = q[1] - d.q0[1];
+        o.mv.forEach((i) => { kf[i] = [c01(o.pts[i][0] + dx), c01(o.pts[i][1] + dy)]; });
+      } else {
+        o.rt.forEach((i) => {
+          const rx = (o.pts[i][0] - o.pivot[0]) * W, ry = (o.pts[i][1] - o.pivot[1]) * H;
+          kf[i] = [c01(o.pivot[0] + (rx * cs - ry * sn) / W), c01(o.pivot[1] + (rx * sn + ry * cs) / H)];
+        });
+      }
+    }
+    this.ptVer++; this.app.requestRender();
+  }
   // Click or drag on the video while a point set is active.
   pointDown(e) {
     const key = this.app.state.pset, def = POINT_SETS[key]; if (!def) return;
     const f = Math.round(this.f), q = this.pt(e), cur = this.livePts(key, f);
     if (cur) {
+      const hit = this.hitHandle(e, key, f);
+      if (hit) { this.startXform(hit, key, f, q, e); return; }
       // Grab the nearest dot; a click far from any dot moves the nearest one there.
       const [cx, cy] = this.canvasXY(e), sc = this.k * this.vw.z, v = this.vw;
       let best = 0, bd = 1e9;
@@ -464,6 +525,21 @@ export class Pane {
         if (cur && cur.key) { ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2.5 * u; ctx.strokeStyle = '#fff'; ctx.stroke(); }
         else { ctx.fillStyle = '#0b0f0e'; ctx.fill(); ctx.lineWidth = 3 * u; ctx.strokeStyle = col; ctx.stroke(); }
       });
+      if (live && cur) {
+        const g = this.handleGeom(k, P, u), dr = this.pdrag && this.pdrag.key === k && this.pdrag.mode === 'rot' ? this.pdrag.delta : 0;
+        const ring = (x, y, r, fill) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); if (fill) { ctx.fillStyle = fill; ctx.fill(); } ctx.lineWidth = 2.5 * u; ctx.strokeStyle = '#fff'; ctx.stroke(); };
+        ctx.save(); ctx.globalAlpha = 0.95;
+        ring(g.center[0], g.center[1], 10 * u, 'rgba(11,15,14,.45)');
+        ctx.beginPath(); ctx.arc(g.center[0], g.center[1], 2.5 * u, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+        if (st.prot) {
+          const hx = g.pivot[0] - Math.sin(dr) * PIN_LEN * u, hy = g.pivot[1] + Math.cos(dr) * PIN_LEN * u;
+          ctx.lineWidth = 2.5 * u; ctx.strokeStyle = '#fff'; ctx.setLineDash([6 * u, 5 * u]);
+          ctx.beginPath(); ctx.moveTo(g.pivot[0], g.pivot[1]); ctx.lineTo(hx, hy); ctx.stroke(); ctx.setLineDash([]);
+          ring(hx, hy, 10 * u, def.color);
+          if (this.pdrag && this.pdrag.mode === 'rot') { const dg = (dr * 180) / Math.PI; tag(ctx, (dg > 0 ? '+' : '') + dg.toFixed(1) + '°', hx + 52 * u, hy, u); }
+        }
+        ctx.restore();
+      }
       if (cur && !def.chain && px.length === 2) {
         const v = computeMetric(def.metric, this.poseFrame(f), this.media, st.hand, st.dir);
         if (v !== null) tag(ctx, METRIC_DEFS[def.metric].fmt(v), (px[0][0] + px[1][0]) / 2, Math.min(px[0][1], px[1][1]) - 26 * u, u);
@@ -649,6 +725,7 @@ export class Pane {
       Object.assign(this.pinch, { d, mx, my });
       return;
     }
+    if (this.pdrag && this.pdrag.mode) { this.applyXform(e); return; }
     if (this.pdrag) {
       const kf = this.pts[this.pdrag.key]?.kf[this.pdrag.f], q = this.pt(e);
       if (kf) { kf[this.pdrag.idx] = [q[0], q[1]]; this.ptVer++; this.app.requestRender(); }
@@ -662,6 +739,8 @@ export class Pane {
       this.clampView(); this.app.requestRender();
       return;
     }
+    const st = this.app.state;
+    if (st.pset && !this.draft) { const h = this.hitHandle(e, st.pset, Math.round(this.f)); this.cv.style.cursor = h === 'move' ? 'move' : h === 'rot' ? 'grab' : ''; }
     if (!this.draft) return;
     const q = this.pt(e);
     this.draft.live = q;
@@ -674,7 +753,7 @@ export class Pane {
     this.ptrs.delete(e.pointerId);
     if (this.ptrs.size < 2) this.pinch = null;
     if (wasPinch) return;
-    if (this.pdrag) { this.pdrag = null; this.ptChanged(); return; }
+    if (this.pdrag) { const was = this.pdrag.mode; this.pdrag = null; if (was) this.cv.style.cursor = ''; this.ptChanged(); return; }
     if (this.pan) { this.endPan(); return; }
     const d = this.draft;
     if (!d || !d.drag) return;

@@ -121,3 +121,7 @@ The Follow box only follows a body that is inside it and moves slowly, so a neig
 
 Pick a player, press **Draw** (or the Player box tool, F), and drag around them. **Show box** turns that player's box on or off from the current frame. Turning one player's box on turns the other off at that frame, so play the clip and the boxes hand off. Player 1 is red, Player 2 is blue. The box does not move by itself; redraw it if the player leaves it.
 
+## Move and rotate a line (1.8.0)
+
+With a point set active, drag the hollow center dot to slide the whole line. Press **S** (or Rotate) to show a pin under the center dot and drag its handle to turn the line. **From this frame** changes this frame and after; **Whole set** shifts every keyframe by the same amount. In the Arm set the shoulder stays on the Shoulders points and the pin turns the arm about the shoulder.
+

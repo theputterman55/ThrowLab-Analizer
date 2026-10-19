@@ -227,3 +227,4 @@ html:not(.trk-on) .trkonly,html:not(.trk-on) .trband{display:none!important}
 .boxbtn[aria-pressed="true"]{background:var(--pc);border-color:var(--pc);color:#fff}
 .pbband{position:absolute;top:0;height:6px;border-radius:3px;background:var(--c);opacity:.9}
 #boxInfo{margin:0 0 4px}
+#ptScope button{padding:4px 8px;font-size:12px}

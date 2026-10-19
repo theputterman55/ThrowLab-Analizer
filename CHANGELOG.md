@@ -8,6 +8,13 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.8.0
+- Move a whole line: while a point set is active, a small hollow dot sits at the center of its line. Drag it to slide the whole line. Dragging an endpoint still moves just that point.
+- Rotate: the **Rotate (S)** button, or the **S** key while a point set is active, shows a pin that drops from the center dot. Drag the pin's round handle to turn the line about its center, with the angle shown while you drag. Press S again to hide it. With no set active, S is still the Square tool.
+- **From this frame** (default) changes this frame and the frames after it. **Whole set** shifts or turns every keyframe of the set by the same amount, to fix a line that was placed slightly off for the whole throw.
+- Arm: the center dot slides the elbow, wrist and hand together (the shoulder stays on your Shoulders points) and the pin turns the arm about the shoulder.
+- Moves and turns can be undone with Undo / Ctrl+Z.
+
 ## 1.7.0
 - Player boxes, driven by frame. Next to Player 1 / 2 there is a **Show box** button, **Draw** and **×**. Draw (or the new Player box tool, F, on the left) drags a box around the selected player and turns it on from the current frame.
 - Show box turns that player's box on or off from the frame you press it on. When one player's box turns on, the other player's box turns off at that frame, so the boxes hand off as the clip plays. Switch them on and off as often as you like.

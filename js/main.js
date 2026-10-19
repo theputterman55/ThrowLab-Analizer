@@ -31,7 +31,7 @@ export const state = {
   smooth: [0, 1, 2].includes(Number(prefs.smooth)) ? Number(prefs.smooth) : 1,
   zoomCrop: prefs.zoomCrop !== false,
   layers: { skeleton: true, joints: true, labels: false, trail: true, lens: true, roi: true },
-  layoutChosen: false, pset: null // pset: the point set being placed by hand (shoulders, hips) or null
+  layoutChosen: false, prot: false, pwhole: false, pset: null // prot: rotate pin shown, pwhole: a move or rotation shifts every keyframe; pset: the point set being placed by hand (shoulders, hips) or null
 };
 
 let dirty = true;
@@ -534,16 +534,21 @@ function updatePtUI() {
   panel.style.setProperty('--c', def.color);
   let hint;
   if (!p.media) hint = 'Open a clip first.';
-  else if (cur) hint = cur.key ? 'Keyframe. Drag a dot to move it, or click near the joint to put the nearest dot there. Press D for the next frame.' : 'Following your earlier points. Drag a dot only where the joint has moved, then press D.';
+  else if (cur) hint = cur.key ? 'Keyframe. Drag a dot to move it, or the center dot to slide the whole line (S shows the rotate pin). Press D for the next frame.' : 'Following your earlier points. Drag a dot only where the joint has moved, or the center dot to slide the whole line (S shows the rotate pin). Then press D.';
   else if (s && s.end !== null) hint = `${def.label} is finished. Press Edit to change it.`;
   else { const i = p.ptNextIndex(key, f); hint = `Click the ${def.names.slice(i).join(', then the ')} on the video.${key === 'arm' && i === 1 ? ' The shoulder comes from your Shoulders points.' : ''}`; }
   $('#ptHint').textContent = hint;
+  $('#ptRotate').setAttribute('aria-pressed', String(state.prot));
+  $$('#ptScope button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.s === 'all') === state.pwhole)));
   $('#ptDone').textContent = s && s.end !== null ? 'Edit' : '✓ Finish';
   $('#ptInfo').textContent = !s ? 'Nothing placed yet.' : `Keyframes: ${ks.map(fr1).join(', ')}. ${s.end !== null ? `Finished, frames ${fr1(ks[0])}–${fr1(s.end)}.` : 'Not finished: the points carry forward until you press Finish on the last frame of the motion.'}`;
   let read = '';
   if (key === 'arm' && cur) read = [['arm', 'Upper arm'], ['forearm', 'Forearm'], ['elbow', 'Elbow'], ['wristBend', 'Wrist']].map(([m, l]) => { const v = p.metric(m); return v === null ? null : `${l} ${METRIC_DEFS[m].fmt(v)}`; }).filter(Boolean).join(' · ');
   $('#ptRead').hidden = !read; $('#ptRead').textContent = read;
 }
+// Move / rotate options
+$('#ptRotate').onclick = () => { state.prot = !state.prot; syncUI(); dirty = true; };
+$$('#ptScope button').forEach((b) => (b.onclick = () => { state.pwhole = b.dataset.s === 'all'; syncUI(); dirty = true; }));
 // Player / throw slots
 $$('#ptPlayer button').forEach((b) => (b.onclick = () => act().switchSlot(+b.dataset.p, act().slot.throw)));
 $('#ptThrow').onclick = (e) => { const b = e.target.closest('button'); if (b) act().switchSlot(act().slot.player, +b.dataset.t); };
@@ -605,6 +610,7 @@ document.addEventListener('keydown', (e) => {
   if (k === 'a') { e.preventDefault(); step(e.shiftKey ? -5 : -1); return; }
   if (slider && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return; // the slider keeps its own arrow keys
   if (state.pset) {
+    if (k === 's') { e.preventDefault(); state.prot = !state.prot; syncUI(); dirty = true; return; } // S: show or hide the rotate pin
     if (e.key === 'Enter') { e.preventDefault(); $('#ptDone').click(); return; }
     if (e.key === 'Escape') { setPset(state.pset); return; }
   }

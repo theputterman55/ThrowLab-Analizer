@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.7.0';
+window.__TL_VERSION = '1.8.0';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -114,6 +114,13 @@ window.__TL_VERSION = '1.7.0';
           <button class="btn sm" id="ptDone" title="Lock the points from the first keyframe to this frame (Enter)">✓ Finish</button>
           <button class="btn sm trkonly" id="ptSeed" title="Start this frame from the tracker's skeleton, then drag to fix">Use tracker's points</button>
           <button class="btn sm" id="ptClear" title="Delete this set of points">Clear set</button>
+        </div>
+        <div class="inline">
+          <button class="btn sm" id="ptRotate" aria-pressed="false" title="Show a pin under the center dot to rotate the line (S)">Rotate (S)</button>
+          <div class="seg" id="ptScope" role="group" aria-label="What a move or rotation changes">
+            <button data-s="from" aria-pressed="true" title="Changes this frame and the frames after it">From this frame</button>
+            <button data-s="all" aria-pressed="false" title="Shifts every keyframe of this set by the same amount">Whole set</button>
+          </div>
         </div>
         <p class="note" id="ptRead" hidden></p>
         <p class="note" id="ptInfo"></p>
