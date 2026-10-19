@@ -366,6 +366,7 @@ export class Pane {
     const a = s.kf[ks[i]];
     if (ks[i] === f) return { pts: a, key: true };
     if (i === ks.length - 1) return { pts: a, key: false };
+    if (!this.app.state.blend) return { pts: a, key: false }; // Hold: stays put until the next keyframe
     const b = s.kf[ks[i + 1]], t = (f - ks[i]) / (ks[i + 1] - ks[i]);
     return { pts: a.map((p, j) => [p[0] + (b[j][0] - p[0]) * t, p[1] + (b[j][1] - p[1]) * t]), key: false };
   }

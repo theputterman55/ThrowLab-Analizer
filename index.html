@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
 // One place to set the app version. It also busts the browser cache so an update always loads fresh code.
-window.__TL_VERSION = '1.9.1';
+window.__TL_VERSION = '1.9.2';
 (function () {
   var V = window.__TL_VERSION, imp = {};
   ['config', 'metrics', 'annotate', 'pose', 'pane', 'store', 'main'].forEach(function (m) {
@@ -50,6 +50,8 @@ window.__TL_VERSION = '1.9.1';
       <div class="grp" id="grpSets">
         <span class="lbl">Point sets</span>
         <div class="ptsets" id="ptSets"></div>
+        <span class="lbl">Between keyframes</span>
+        <div class="seg wide" id="ptBlend" role="group" aria-label="Between keyframes"><button data-b="0" aria-pressed="true" title="The line stays exactly where you put it until the next keyframe">Hold still</button><button data-b="1" aria-pressed="false" title="The line glides from one keyframe to the next">Glide</button></div>
         <div class="ptact" id="ptActions">
           <button class="btn sm" id="ptUndo" title="Undo the last point change (Ctrl+Z)">Undo</button>
           <button class="btn sm" id="ptDone" title="Lock the points from the first keyframe to this frame (Enter)">✓ Finish</button>

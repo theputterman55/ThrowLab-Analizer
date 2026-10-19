@@ -8,6 +8,9 @@ Versions use MAJOR.MINOR.PATCH (semantic versioning).
 
 The current version is shown next to the ThrowLab name (top left) and is set in `index.html` (`window.__TL_VERSION`). Changing it also forces browsers to load the new code.
 
+## 1.9.2
+- New "Between keyframes" switch in the Point labeler: **Hold still** (default) keeps a line exactly where you put it until the next keyframe, so it no longer drifts across the screen as you step frames. **Glide** keeps the old behavior of sliding from one keyframe to the next. The choice is remembered.
+
 ## 1.9.1
 - Angle boxes sit halfway between the edge of the picture and the player, never touching the marked points.
 - The Elbow leader line ends on the middle of the upper-arm line and the Wrist leader on the middle of the forearm line (the shoulder tilt one was already on the middle of the shoulder line).
