@@ -374,6 +374,12 @@ $('#snap').onclick = () => {
   p.cv.toBlob((b) => b && download(b, `throwlab-${p.id}-F${Math.round(p.f) + 1}.png`), 'image/png');
 };
 
+/* ---------- keep pinch / Ctrl+scroll inside the app ---------- */
+// A trackpad pinch arrives as Ctrl+wheel and would zoom the whole browser page. Block that
+// everywhere; a pane under the pointer handles it as a video zoom instead.
+document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+
 /* ---------- keyboard ---------- */
 document.addEventListener('keydown', (e) => {
   const tg = e.target.tagName;

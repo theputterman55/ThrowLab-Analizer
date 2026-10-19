@@ -48,6 +48,7 @@ export class Pane {
     this.analyzing = false; this.seeking = false;
     // View (zoom/pan) in canvas pixels: screen = point * z + (tx, ty). hold locks it.
     this.vw = { z: 1, tx: 0, ty: 0, hold: false }; this.pan = null;
+    this.ptrs = new Map(); this.pinch = null;
     this.tmp = document.createElement('canvas');
     this.build();
   }
@@ -78,7 +79,7 @@ export class Pane {
     this.cv.addEventListener('pointerdown', (e) => this.onDown(e));
     this.cv.addEventListener('pointermove', (e) => this.onMove(e));
     this.cv.addEventListener('pointerup', (e) => this.onUp(e));
-    this.cv.addEventListener('pointercancel', () => { this.draft = null; this.endPan(); this.app.requestRender(); });
+    this.cv.addEventListener('pointercancel', (e) => { this.ptrs.delete(e.pointerId); this.pinch = null; this.draft = null; this.endPan(); this.app.requestRender(); });
     this.cv.addEventListener('contextmenu', (e) => { if (this.media) e.preventDefault(); });
     this.cv.addEventListener('dblclick', () => { if (this.media && this.app.state.tool === 'cursor') this.fit(); });
     // Pinch on a trackpad arrives as Ctrl+wheel; a mouse wheel zooms too. Both zoom toward the pointer.
@@ -90,6 +91,14 @@ export class Pane {
       const [cx, cy] = this.canvasXY(e);
       this.zoomAt(cx, cy, this.vw.z * Math.exp(-dy * (e.ctrlKey ? 0.012 : 0.0025)));
     }, { passive: false });
+    // Safari reports trackpad pinch as gesture events instead of Ctrl+wheel.
+    let gz0 = 1;
+    this.view.addEventListener('gesturestart', (e) => { e.preventDefault(); gz0 = this.vw.z; });
+    this.view.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+      if (this.media && !this.vw.hold) { const [cx, cy] = this.canvasXY(e); this.zoomAt(cx, cy, gz0 * e.scale); }
+    });
+    this.view.addEventListener('gestureend', (e) => e.preventDefault());
     this.zc = el.querySelector('.zoomctl');
     this.zSlider = this.zc.querySelector('input'); this.zRead = this.zc.querySelector('.zread');
     this.zc.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -305,6 +314,14 @@ export class Pane {
   onDown(e) {
     const st = this.app.state, t = st.tool;
     if (!this.media) return;
+    // Two fingers on a touch screen: pinch to zoom, drag to pan.
+    this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (e.pointerType === 'touch' && this.ptrs.size === 2) {
+      e.preventDefault(); this.draft = null; this.endPan();
+      const [a, b] = [...this.ptrs.values()];
+      this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+      return;
+    }
     // Pan: middle or right button, Alt/Shift+drag, or any drag with the cursor tool. Only when zoomed in and not on hold.
     if (e.button === 1 || e.button === 2 || (e.button === 0 && (e.altKey || e.shiftKey || t === 'cursor'))) {
       e.preventDefault();
@@ -347,6 +364,17 @@ export class Pane {
   }
 
   onMove(e) {
+    if (this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pinch && this.ptrs.size >= 2) {
+      const [a, b] = [...this.ptrs.values()], r = this.cv.getBoundingClientRect(), v = this.vw;
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      if (!v.hold) {
+        v.tx += ((mx - this.pinch.mx) / r.width) * this.cv.width; v.ty += ((my - this.pinch.my) / r.height) * this.cv.height;
+        this.zoomAt(((mx - r.left) / r.width) * this.cv.width, ((my - r.top) / r.height) * this.cv.height, v.z * (d / this.pinch.d));
+      }
+      Object.assign(this.pinch, { d, mx, my });
+      return;
+    }
     if (this.pan) {
       const r = this.cv.getBoundingClientRect(), v = this.vw;
       v.tx += ((e.clientX - this.pan.x) / r.width) * this.cv.width;
@@ -363,6 +391,10 @@ export class Pane {
   }
 
   onUp(e) {
+    const wasPinch = !!this.pinch;
+    this.ptrs.delete(e.pointerId);
+    if (this.ptrs.size < 2) this.pinch = null;
+    if (wasPinch) return;
     if (this.pan) { this.endPan(); return; }
     const d = this.draft;
     if (!d || !d.drag) return;

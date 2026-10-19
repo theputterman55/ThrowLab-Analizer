@@ -100,6 +100,19 @@ def main():
         check("can still draw on hold", count() == n1 + 1 and vw()[:3] == held[:3], (count(), vw()))
         pg.click("section.pane[data-id=A] [data-z=hold]"); pg.click("section.pane[data-id=A] [data-z=fit]"); pg.wait_for_timeout(80)
         check("fit resets", vw()[:3] == [1, 0, 0], vw())
+        # page zoom must be blocked everywhere; pinch must act on the video only
+        blocked = pg.evaluate("""(()=>{const r=[];for(const sel of ['#side','.top','#stage','section.pane[data-id=A] canvas']){const el=document.querySelector(sel);const ev=new WheelEvent('wheel',{ctrlKey:true,deltaY:-50,bubbles:true,cancelable:true});el.dispatchEvent(ev);r.push(ev.defaultPrevented)}return r})()""")
+        check("ctrl+wheel never reaches browser page zoom", all(blocked), blocked)
+        # two-finger touch pinch on the canvas
+        pg.evaluate("""(()=>{const c=document.querySelector('section.pane[data-id=A] canvas'),r=c.getBoundingClientRect();
+          const mk=(t,id,x,y)=>c.dispatchEvent(new PointerEvent(t,{pointerId:id,pointerType:'touch',clientX:x,clientY:y,bubbles:true,cancelable:true,isPrimary:id===1}));
+          const cx=r.left+r.width/2,cy=r.top+r.height/2;
+          mk('pointerdown',1,cx-20,cy);mk('pointerdown',2,cx+20,cy);
+          mk('pointermove',1,cx-60,cy);mk('pointermove',2,cx+60,cy);
+          mk('pointerup',1,cx-60,cy);mk('pointerup',2,cx+60,cy);})()""")
+        pg.wait_for_timeout(80)
+        check("touch pinch zooms the video", vw()[0] > 2, vw())
+        pg.click("section.pane[data-id=A] [data-z=fit]")
         pg.click("section.pane[data-id=A] [data-z=lens]")
         check("corner magnifier selects zoom window", pg.evaluate("window.__throwlab.state.tool") == "lens")
         pg.keyboard.press("Control+z"); pg.keyboard.press("Control+z"); pg.wait_for_timeout(80)
